@@ -1,0 +1,38 @@
+name: "Taskflow"
+description: "Family household task manager for Home Assistant"
+version: "1.0.0"
+slug: "taskflow"
+url: "https://github.com/umadgen/taskflow-addon"
+init: false
+
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+
+startup: application
+boot: auto
+
+ingress: true
+ingress_port: 8787
+
+map:
+  - data:rw
+
+options:
+  household_name: "My Home"
+  members: []
+  pets: []
+
+schema:
+  household_name: str
+  members:
+    - name: str
+      tone: "list(rose|peach|amber|mint|sky|lilac)"
+      avatar: str?
+  pets:
+    - name: str
+      species: str
+      emoji: str?
