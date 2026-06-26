@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	_ "embed"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +20,15 @@ import (
 	"foyer/taskflow/internal/ws"
 )
 
+//go:embed web/foyer-tasks-card.js
+var cardJS []byte
+
+const (
+	cardDest    = "/config/www/taskflow/foyer-tasks-card.js"
+	cardURL     = "/local/taskflow/foyer-tasks-card.js"
+	supervisorAPI = "http://supervisor/core/api"
+)
+
 func main() {
 	dbPath    := env("FOYER_DB", "./foyer.sqlite")
 	port      := env("PORT", "8787")
@@ -30,6 +41,7 @@ func main() {
 		log.Fatalf("db: %v", err)
 	}
 	seedFromOptions(database)
+	bootstrap(env("SUPERVISOR_TOKEN", ""))
 
 	hub := ws.NewHub()
 
@@ -49,6 +61,64 @@ func main() {
 
 	log.Printf("foyer-go listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
+}
+
+// bootstrap copies the Lovelace card to /config/www/taskflow/ and registers
+// it as a Lovelace resource via the HA Supervisor API.
+func bootstrap(token string) {
+	if err := os.MkdirAll("/config/www/taskflow", 0o755); err != nil {
+		log.Printf("bootstrap: mkdir: %v", err)
+		return
+	}
+	if err := os.WriteFile(cardDest, cardJS, 0o644); err != nil {
+		log.Printf("bootstrap: write card: %v", err)
+		return
+	}
+	log.Printf("bootstrap: card écrite dans %s", cardDest)
+
+	if token == "" {
+		log.Printf("bootstrap: SUPERVISOR_TOKEN absent, enregistrement Lovelace ignoré")
+		return
+	}
+	registerLovelaceResource(token, cardURL)
+}
+
+func registerLovelaceResource(token, url string) {
+	client := &http.Client{}
+
+	// Vérifier si la ressource est déjà enregistrée
+	req, _ := http.NewRequest("GET", supervisorAPI+"/lovelace/resources", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("bootstrap: HA API injoignable: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var resources []struct {
+		URL string `json:"url"`
+	}
+	json.NewDecoder(resp.Body).Decode(&resources)
+	for _, r := range resources {
+		if r.URL == url {
+			log.Printf("bootstrap: ressource Lovelace déjà enregistrée")
+			return
+		}
+	}
+
+	// Enregistrer
+	payload, _ := json.Marshal(map[string]string{"url": url, "res_type": "module"})
+	req, _ = http.NewRequest("POST", supervisorAPI+"/lovelace/resources", bytes.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp2, err := client.Do(req)
+	if err != nil {
+		log.Printf("bootstrap: enregistrement ressource: %v", err)
+		return
+	}
+	defer resp2.Body.Close()
+	log.Printf("bootstrap: ressource Lovelace enregistrée (%s)", url)
 }
 
 type haOptions struct {
