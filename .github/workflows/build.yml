@@ -37,6 +37,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read version from config.yaml
+        id: version
+        run: echo "version=$(grep '^version:' taskflow-backend/config.yaml | awk '{print $2}' | tr -d '\"')" >> $GITHUB_OUTPUT
+
       - name: Build and push taskflow-${{ matrix.ha_arch }}
         uses: docker/build-push-action@v5
         with:
@@ -45,4 +49,4 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/taskflow-${{ matrix.ha_arch }}:latest
-            ghcr.io/${{ github.repository }}/taskflow-${{ matrix.ha_arch }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/taskflow-${{ matrix.ha_arch }}:${{ steps.version.outputs.version }}
