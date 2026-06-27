@@ -25,6 +25,9 @@ import (
 //go:embed web/foyer-tasks-card.js
 var cardJS []byte
 
+//go:embed web/admin.html
+var adminHTML []byte
+
 const (
 	cardDest    = "/config/www/taskflow/foyer-tasks-card.js"
 	cardURL     = "/local/taskflow/foyer-tasks-card.js"
@@ -61,6 +64,12 @@ func main() {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(corsMiddleware)
+	serveAdmin := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(adminHTML)
+	}
+	r.Get("/", serveAdmin)
+	r.Get("/admin", serveAdmin)
 	r.Get("/foyer-tasks-card.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Write(cardJS)
