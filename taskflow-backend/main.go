@@ -25,12 +25,17 @@ import (
 //go:embed web/foyer-tasks-card.js
 var cardJS []byte
 
+//go:embed web/foyer-pets-card.js
+var petsCardJS []byte
+
 //go:embed web/admin.html
 var adminHTML []byte
 
 const (
-	cardDest    = "/config/www/taskflow/foyer-tasks-card.js"
-	cardURL     = "/local/taskflow/foyer-tasks-card.js"
+	cardDest     = "/config/www/taskflow/foyer-tasks-card.js"
+	cardURL      = "/local/taskflow/foyer-tasks-card.js"
+	petsCardDest = "/config/www/taskflow/foyer-pets-card.js"
+	petsCardURL  = "/local/taskflow/foyer-pets-card.js"
 	supervisorAPI = "http://supervisor/core/api"
 )
 
@@ -74,6 +79,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Write(cardJS)
 	})
+	r.Get("/foyer-pets-card.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Write(petsCardJS)
+	})
 	h.Mount(r)
 
 	log.Printf("foyer-go listening on :%s", port)
@@ -94,13 +103,17 @@ func bootstrap(token string) {
 		log.Printf("bootstrap: write card: %v", err)
 		return
 	}
-	log.Printf("bootstrap: card écrite dans %s", cardDest)
+	if err := os.WriteFile(petsCardDest, petsCardJS, 0o644); err != nil {
+		log.Printf("bootstrap: write pets card: %v", err)
+	}
+	log.Printf("bootstrap: cards écrites dans /config/www/taskflow/")
 
 	if token == "" {
 		log.Printf("bootstrap: SUPERVISOR_TOKEN absent, enregistrement Lovelace ignoré")
 		return
 	}
 	registerLovelaceResource(token, cardURL)
+	registerLovelaceResource(token, petsCardURL)
 
 	// First install only: restart HA Core so it registers the /local/ static route.
 	// The marker file persists in /data/ (add-on data volume) across restarts.
