@@ -71,8 +71,11 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
 
+const bootstrapMarker = "/data/.local_activated"
+
 // bootstrap copies the Lovelace card to /config/www/taskflow/ and registers
 // it as a Lovelace resource via the HA Supervisor API.
+// On first install, it restarts HA Core so the /local/ static route is activated.
 func bootstrap(token string) {
 	if err := os.MkdirAll("/config/www/taskflow", 0o755); err != nil {
 		log.Printf("bootstrap: mkdir: %v", err)
@@ -89,6 +92,34 @@ func bootstrap(token string) {
 		return
 	}
 	registerLovelaceResource(token, cardURL)
+
+	// First install only: restart HA Core so it registers the /local/ static route.
+	// The marker file persists in /data/ (add-on data volume) across restarts.
+	if _, err := os.Stat(bootstrapMarker); os.IsNotExist(err) {
+		if err2 := os.WriteFile(bootstrapMarker, []byte("1"), 0o644); err2 == nil {
+			log.Printf("bootstrap: premier démarrage, restart HA Core dans 10s pour activer /local/")
+			go func() {
+				time.Sleep(10 * time.Second)
+				restartHACore(token)
+			}()
+		}
+	}
+}
+
+func restartHACore(token string) {
+	req, err := http.NewRequest("POST", "http://supervisor/homeassistant/restart", nil)
+	if err != nil {
+		log.Printf("bootstrap: restart: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("bootstrap: restart HA Core: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	log.Printf("bootstrap: restart HA Core demandé (statut %d)", resp.StatusCode)
 }
 
 func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
