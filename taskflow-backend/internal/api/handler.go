@@ -33,6 +33,7 @@ func (h *Handler) Mount(r chi.Router) {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/snapshot", h.getSnapshot)
 		r.Get("/sync", h.hub.ServeHTTP)
+		r.Post("/ops", h.handleOps)
 
 		r.Route("/members", func(r chi.Router) {
 			r.Get("/", h.listMembers)

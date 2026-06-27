@@ -61,6 +61,10 @@ func main() {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(corsMiddleware)
+	r.Get("/foyer-tasks-card.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Write(cardJS)
+	})
 	h.Mount(r)
 
 	log.Printf("foyer-go listening on :%s", port)
