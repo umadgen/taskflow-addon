@@ -1,6 +1,6 @@
 name: "Taskflow"
 description: "Family household task manager for Home Assistant"
-version: "1.2.0"
+version: "1.3.0"
 slug: "taskflow"
 url: "https://github.com/umadgen/taskflow-addon"
 image: "ghcr.io/umadgen/taskflow-addon/taskflow-{arch}"
@@ -18,6 +18,9 @@ boot: auto
 
 ingress: true
 ingress_port: 8787
+
+ports:
+  8787/tcp: 8787
 
 homeassistant_api: true
 

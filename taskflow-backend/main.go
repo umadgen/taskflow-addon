@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	_ "embed"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	chi "github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -44,6 +46,8 @@ func main() {
 	bootstrap(env("SUPERVISOR_TOKEN", ""))
 
 	hub := ws.NewHub()
+
+	go runHASensorPublisher(env("SUPERVISOR_TOKEN", ""), database, hub)
 
 	mqttClient := mqtt.NewClient(mqttURL)
 	if err := mqttClient.Connect(); err != nil {
@@ -81,6 +85,66 @@ func bootstrap(token string) {
 		return
 	}
 	registerLovelaceResource(token, cardURL)
+}
+
+func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
+	if token == "" {
+		log.Printf("ha-sensor: SUPERVISOR_TOKEN absent, publication sensor ignorée")
+		return
+	}
+	publish := func() {
+		snap, err := database.GetSnapshot()
+		if err != nil {
+			log.Printf("ha-sensor: GetSnapshot: %v", err)
+			return
+		}
+		if err := publishHASensor(token, snap); err != nil {
+			log.Printf("ha-sensor: publish: %v", err)
+		}
+	}
+	publish()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-hub.OnChange():
+			publish()
+		case <-ticker.C:
+			publish()
+		}
+	}
+}
+
+func publishHASensor(token string, snap model.MQTTSnapshot) error {
+	type payload struct {
+		State      string         `json:"state"`
+		Attributes map[string]any `json:"attributes"`
+	}
+	p := payload{
+		State: fmt.Sprintf("%d", snap.Seq),
+		Attributes: map[string]any{
+			"tasks":         snap.Tasks,
+			"members":       snap.Members,
+			"history":       snap.History,
+			"friendly_name": "Foyer Snapshot",
+		},
+	}
+	body, _ := json.Marshal(p)
+	req, err := http.NewRequest(http.MethodPost, supervisorAPI+"/states/sensor.foyer_snapshot", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("HA API répondu %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func registerLovelaceResource(token, url string) {

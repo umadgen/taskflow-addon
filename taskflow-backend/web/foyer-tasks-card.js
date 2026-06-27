@@ -1452,8 +1452,12 @@ class FoyerTasksCard extends HTMLElement {
     setTimeout(() => this._openMembers(), 300);
   }
 
+  get _apiBase() {
+    return this._config?.api_base ?? `http://${location.hostname}:8787`;
+  }
+
   async _callApi(op) {
-    const resp = await fetch('http://localhost:8787/api/ops', {
+    const resp = await fetch(this._apiBase + '/api/ops', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(op),
@@ -1513,7 +1517,7 @@ class FoyerTasksCard extends HTMLElement {
       : { type: 'addTask', id: this._newId(), task: { ...patch, done: false, doneBy: null, doneAt: null } };
 
     try {
-      const resp = await fetch('http://localhost:8787/api/ops', {
+      const resp = await fetch(this._apiBase + '/api/ops', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(op),
