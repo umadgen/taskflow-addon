@@ -1098,9 +1098,9 @@ class FoyerTasksCard extends HTMLElement {
       allUpcoming.forEach(t => { html += this._upcomingRowHTML(t); });
       html += `</div>`;
     }
-    if (this._config.show_done && done.length) {
+    if (this._config.show_done && todayDone.length) {
       html += `<div class="section-label">Terminées</div>`;
-      done.forEach(t => { html += this._rowHTML(t, members); });
+      todayDone.forEach(t => { html += this._rowHTML(t, members); });
     }
     if (!late.length && !todayT.length && !upcoming.length) {
       html += `
@@ -1606,14 +1606,14 @@ class FoyerTasksCard extends HTMLElement {
 
   _confirmComplete(memberId) {
     if (!this._pendingTask || !this._hass) return;
-    const taskId = this._pendingTask.id;
+    const task = this._pendingTask;
     this._closeModal();
-    this._hass.callService('script', 'foyer_complete_task', {
-      task_id:   taskId,
-      member_id: memberId,
+    this._callApi({
+      type: 'completeTask', id: task.id, memberId,
+      at: new Date().toISOString().slice(0, 16),
+      newId: this._newId(), histId: this._newId(),
     });
-    // Masquage optimiste immédiat
-    const row = this.shadowRoot.querySelector(`[data-task="${taskId}"]`);
+    const row = this.shadowRoot.querySelector(`[data-task="${task.id}"]`);
     if (row) row.style.display = 'none';
   }
 
