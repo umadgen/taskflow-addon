@@ -1032,7 +1032,7 @@ class FoyerTasksCard extends HTMLElement {
       return;
     }
 
-    const { tasks, members } = data;
+    const { tasks, members, history } = data;
     const today = new Date().toISOString().slice(0, 10);
 
     // ── Filter bar ─────────────────────────────────────────────────────────
@@ -1177,9 +1177,10 @@ class FoyerTasksCard extends HTMLElement {
       });
     });
 
-    // Progress = urgent tasks only (today + late + completed today)
-    const urgentTotal = late.length + todayT.length + todayDone.length;
-    const urgentDone  = todayDone.length;
+    // Progress = pending urgent + completions today (from history, covers recurring)
+    const todayHistDone = (history ?? []).filter(h => h.at?.slice(0, 10) === today);
+    const urgentTotal = late.length + todayT.length + todayHistDone.length;
+    const urgentDone  = todayHistDone.length;
     this._setHeader(urgentDone, urgentTotal, late.length);
   }
 
@@ -1827,16 +1828,17 @@ class FoyerProgressCard extends HTMLElement {
     }
 
     const tasks    = state.attributes.tasks   ?? [];
+    const history  = state.attributes.history ?? [];
     const today    = new Date().toISOString().slice(0, 10);
     const appWd    = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
     const ruleOk   = t => !t.recurring || !t.weekDays?.length || t.repeat !== 'semaine' || t.weekDays.includes(appWd(t.due?.slice(0, 10) ?? today));
-    // Active = pending tasks; todayDone = completion records for today
+    // doneToday: all completions today (covers both recurring and non-recurring)
     const active    = tasks.filter(t => !t.done);
-    const todayDone = tasks.filter(t => t.done && !t.recurring && t.due?.slice(0, 10) === today);
+    const doneToday = history.filter(h => h.at?.slice(0, 10) === today);
     const late      = active.filter(t => ruleOk(t) && (t.late || t.due?.slice(0, 10) < today)).length;
     const todayPend = active.filter(t => ruleOk(t) && !t.late && t.due?.slice(0, 10) === today).length;
-    const total     = late + todayPend + todayDone.length;
-    const done      = todayDone.length;
+    const total     = late + todayPend + doneToday.length;
+    const done      = doneToday.length;
     const pending   = total - done;
     const pct       = total > 0 ? Math.round((done / total) * 100) : 0;
 
@@ -1852,7 +1854,7 @@ class FoyerProgressCard extends HTMLElement {
 
     const catBreakdown = Object.entries(FOYER_CAT_COLORS).map(([cat, color]) => {
       const catActive  = active.filter(t => t.cat === cat && ruleOk(t) && (t.late || t.due?.slice(0,10) <= today));
-      const catDone    = todayDone.filter(t => t.cat === cat).length;
+      const catDone    = doneToday.filter(h => h.cat === cat).length;
       const catTasks   = catActive.length + catDone;
       if (!catTasks) return '';
       const catPct = Math.round((catDone / catTasks) * 100);
@@ -1867,7 +1869,6 @@ class FoyerProgressCard extends HTMLElement {
       `;
     }).join('');
 
-    const history   = state.attributes.history ?? [];
     const weekStart = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
     const weekCount = history.filter(h => h.at?.slice(0, 10) >= weekStart).length;
 
