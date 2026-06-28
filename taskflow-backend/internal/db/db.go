@@ -364,6 +364,20 @@ func (d *DB) GetSnapshot() (model.MQTTSnapshot, error) {
 
 // ── Import ────────────────────────────────────────────────────────────────────
 
+func (d *DB) ClearAll() error {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"members", "tasks", "history", "pets", "settings"} {
+		if _, err := tx.Exec(`DELETE FROM ` + table); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (d *DB) IsEmpty() (bool, error) {
 	var n int
 	err := d.sql.QueryRow(`SELECT COUNT(*) FROM members`).Scan(&n)

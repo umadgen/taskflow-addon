@@ -61,6 +61,8 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Get("/settings", h.getSettings)
 		r.Patch("/settings", h.updateSettings)
 		r.Post("/import", h.importData)
+		r.Get("/export", h.exportData)
+		r.Post("/restore", h.restoreData)
 	})
 
 	if h.static != "" {

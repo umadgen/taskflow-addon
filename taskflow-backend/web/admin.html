@@ -200,9 +200,25 @@
 
   <!-- SETTINGS -->
   <div id="tab-settings" class="panel">
-    <div class="card" style="padding:24px;max-width:400px">
-      <div class="fg"><label>Nom du foyer</label><input type="text" id="s-name" placeholder="Mon foyer"></div>
-      <button class="btn btn-p" onclick="saveSettings()">Enregistrer</button>
+    <div style="display:grid;gap:16px;max-width:440px">
+      <div class="card" style="padding:24px">
+        <div style="font-size:15px;font-weight:700;margin-bottom:16px">Général</div>
+        <div class="fg"><label>Nom du foyer</label><input type="text" id="s-name" placeholder="Mon foyer"></div>
+        <button class="btn btn-p" onclick="saveSettings()">Enregistrer</button>
+      </div>
+      <div class="card" style="padding:24px">
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Sauvegarde</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Exporte toutes les données (tâches, membres, animaux, historique) dans un fichier JSON.</div>
+        <button class="btn btn-p" onclick="doExport()" style="margin-bottom:20px">⬇ Exporter les données</button>
+        <div style="border-top:1px solid var(--border);padding-top:20px">
+          <div style="font-size:15px;font-weight:700;margin-bottom:4px">Restaurer</div>
+          <div style="font-size:13px;color:var(--err);margin-bottom:12px">⚠ Toutes les données existantes seront remplacées.</div>
+          <label class="btn btn-g" style="cursor:pointer">
+            ⬆ Choisir un fichier de sauvegarde
+            <input type="file" accept=".json" id="restore-input" style="display:none" onchange="doRestore(this)">
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -894,6 +910,34 @@ async function saveSettings(){
     const r=await fetch('api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);await load();toast('Paramètres enregistrés');
   }catch(e){toast('Erreur',true);}
+}
+
+async function doExport(){
+  try{
+    const r=await fetch('api/export');
+    if(!r.ok)throw new Error(r.status);
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`taskflow-backup-${now()}.json`;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+    toast('Export téléchargé');
+  }catch(e){toast('Erreur export',true);}
+}
+
+async function doRestore(input){
+  const file=input.files[0];input.value='';
+  if(!file)return;
+  if(!confirm(`Restaurer « ${file.name} » ?\nToutes les données actuelles seront remplacées.`))return;
+  try{
+    const text=await file.text();
+    JSON.parse(text); // validate JSON before sending
+    const r=await fetch('api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:text});
+    if(!r.ok)throw new Error(await r.text());
+    await load();toast('Données restaurées ✓');
+  }catch(e){toast('Erreur restauration : '+e.message,true);}
 }
 
 // ── Confirm / Delete ──────────────────────────────────────────────────────────
