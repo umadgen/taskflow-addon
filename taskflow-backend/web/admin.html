@@ -135,7 +135,44 @@
     .confirm-modal{max-width:360px}
     .confirm-msg{margin-bottom:18px;color:var(--text);line-height:1.5}
 
-    @media(max-width:600px){.row2,.row3{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.pet-grid{grid-template-columns:1fr}}
+    /* Stats */
+    .stat-member-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:12px}
+    .stat-member-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+    .stat-rank{font-size:20px;font-weight:800;color:var(--muted);width:28px;flex-shrink:0}
+    .stat-rank.gold{color:#f59e0b}.stat-rank.silver{color:#9ca3af}.stat-rank.bronze{color:#b45309}
+    .stat-member-name{font-size:15px;font-weight:700;flex:1}
+    .stat-total{font-size:22px;font-weight:800;color:var(--accent)}
+    .stat-total-lbl{font-size:12px;color:var(--muted)}
+    .stat-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    .stat-bar-lbl{font-size:12px;color:var(--muted);width:80px;flex-shrink:0;text-align:right}
+    .stat-bar-track{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+    .stat-bar-fill{height:100%;border-radius:4px;transition:width .4s}
+    .stat-bar-n{font-size:12px;font-weight:600;width:24px;text-align:right;flex-shrink:0}
+    .stat-empty{text-align:center;padding:40px;color:var(--muted)}
+
+    /* Calendar */
+    .cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+    .cal-nav-title{font-size:17px;font-weight:700;flex:1;text-align:center;text-transform:capitalize}
+    .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);background:#f9fafb}
+    .cal-weekdays div{text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding:8px 0;text-transform:uppercase;letter-spacing:.5px}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+    .cal-cell{min-height:70px;padding:5px 6px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;position:relative}
+    .cal-cell:nth-child(7n){border-right:none}
+    .cal-cell:hover{background:#f0f4ff}
+    .cal-cell.other{opacity:.38}
+    .cal-cell.today .cal-dn{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+    .cal-dn{font-size:12px;font-weight:600;margin-bottom:3px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+    .cal-events{display:flex;flex-wrap:wrap;gap:2px}
+    .cal-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .cal-tag{font-size:10px;padding:1px 5px;border-radius:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+    .day-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+    .day-item:last-child{border-bottom:none}
+    .day-item-ico{font-size:18px;flex-shrink:0;margin-top:1px}
+    .day-item-info{flex:1;min-width:0}
+    .day-item-lbl{font-size:14px;font-weight:500}
+    .day-item-sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+    @media(max-width:600px){.row2,.row3{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.pet-grid{grid-template-columns:1fr}.cal-cell{min-height:48px}.cal-tag{display:none}}
   </style>
 </head>
 <body>
@@ -151,6 +188,8 @@
   <button class="tab" data-tab="members">Membres</button>
   <button class="tab" data-tab="pets">Animaux</button>
   <button class="tab" data-tab="history">Historique</button>
+  <button class="tab" data-tab="stats">Stats</button>
+  <button class="tab" data-tab="calendar">Calendrier</button>
   <button class="tab" data-tab="settings">Paramètres</button>
 </div>
 
@@ -195,6 +234,42 @@
         <thead><tr><th>Tâche</th><th>Catégorie</th><th>Par</th><th>Date</th></tr></thead>
         <tbody id="history-body"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div id="tab-stats" class="panel">
+    <div class="toolbar">
+      <div class="toolbar-l" id="stat-chips">
+        <button class="fchip on" data-p="week" onclick="setStatPeriod('week')">Cette semaine</button>
+        <button class="fchip" data-p="month" onclick="setStatPeriod('month')">Ce mois</button>
+        <button class="fchip" data-p="all" onclick="setStatPeriod('all')">Tout temps</button>
+      </div>
+    </div>
+    <div id="stats-members"></div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div id="tab-calendar" class="panel">
+    <div class="cal-nav">
+      <button class="btn btn-g btn-icon" onclick="calMove(-1)">&#8249;</button>
+      <span class="cal-nav-title" id="cal-title"></span>
+      <button class="btn btn-g btn-icon" onclick="calMove(1)">&#8250;</button>
+    </div>
+    <div class="card" style="overflow:hidden">
+      <div class="cal-weekdays">
+        <div>Lun</div><div>Mar</div><div>Mer</div><div>Jeu</div><div>Ven</div><div>Sam</div><div>Dim</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+  </div>
+
+  <!-- DAY MODAL -->
+  <div class="overlay hide" id="day-ov">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-h" id="day-mh"></div>
+      <div id="day-items" style="max-height:60vh;overflow-y:auto;margin-bottom:4px"></div>
+      <div class="modal-f"><button class="btn btn-g" onclick="document.getElementById('day-ov').classList.add('hide')">Fermer</button></div>
     </div>
   </div>
 
@@ -466,6 +541,7 @@ async function load(){
 
 function render(){
   renderStats();renderCatChips();renderTasks();renderMembers();renderPets();renderHistory();renderSettings();
+  renderStatMembers();renderCalendar();
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -992,6 +1068,159 @@ function toast(msg,err){
   const el=document.getElementById('toast');el.textContent=msg;
   el.className='toast show'+(err?' err':'');
   clearTimeout(_toastT);_toastT=setTimeout(()=>{el.className='toast';},3200);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+let statPeriod='week';
+function setStatPeriod(p){
+  statPeriod=p;
+  document.querySelectorAll('#stat-chips .fchip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
+  renderStatMembers();
+}
+
+function renderStatMembers(){
+  const el=document.getElementById('stats-members');
+  if(!S.members.length){el.innerHTML=`<div class="stat-empty">Aucun membre enregistré</div>`;return;}
+  const today=now();
+  const from=statPeriod==='week'?weekStart():statPeriod==='month'?monthStart():null;
+  const hist=from?S.history.filter(h=>h.at&&h.at.slice(0,10)>=from):S.history;
+
+  const rows=S.members.map(m=>{
+    const mine=hist.filter(h=>h.by===m.id);
+    const bycat={};
+    mine.forEach(h=>{if(h.cat)bycat[h.cat]=(bycat[h.cat]||0)+1;});
+    return{m,count:mine.length,bycat};
+  }).sort((a,b)=>b.count-a.count);
+
+  const maxCount=rows[0]?.count||1;
+  const rankStyle=['gold','silver','bronze'];
+
+  el.innerHTML=rows.map((r,i)=>{
+    const {m,count,bycat}=r;
+    const hex=TONE_HEX[m.tone]||'#9e9e9e';
+    const rankCls=i<3?rankStyle[i]:'';
+    const rankEmoji=i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    const topCats=Object.entries(bycat).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const catBars=topCats.map(([cat,n])=>{
+      const cc=CAT_COLORS[cat]||'#9e9e9e';
+      const pct=maxCount?Math.round((n/maxCount)*100):0;
+      return`<div class="stat-bar-row">
+        <div class="stat-bar-lbl">${CAT_ICONS[cat]||''} ${cat}</div>
+        <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${pct}%;background:${cc}"></div></div>
+        <div class="stat-bar-n">${n}</div>
+      </div>`;
+    }).join('');
+    const pct=maxCount?Math.round((count/maxCount)*100):0;
+    return`<div class="stat-member-card">
+      <div class="stat-member-head">
+        <div class="stat-rank ${rankCls}">${rankEmoji||'#'+(i+1)}</div>
+        ${chip(m,32,13)}
+        <div style="flex:1"></div>
+        <div style="text-align:right">
+          <div class="stat-total">${count}</div>
+          <div class="stat-total-lbl">tâche${count>1?'s':''}</div>
+        </div>
+      </div>
+      <div class="stat-bar-row" style="margin-bottom:10px">
+        <div class="stat-bar-lbl" style="color:var(--text);font-weight:600">Total</div>
+        <div class="stat-bar-track" style="height:12px"><div class="stat-bar-fill" style="width:${pct}%;background:${hex}"></div></div>
+        <div class="stat-bar-n">${count}</div>
+      </div>
+      ${catBars||'<div style="font-size:13px;color:var(--muted)">Aucune tâche sur cette période</div>'}
+    </div>`;
+  }).join('');
+}
+
+function weekStart(){
+  const d=new Date();const day=d.getDay()||7;d.setDate(d.getDate()-day+1);return d.toISOString().slice(0,10);
+}
+function monthStart(){const d=new Date();d.setDate(1);return d.toISOString().slice(0,10);}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+
+let calYear=new Date().getFullYear(),calMonth=new Date().getMonth();
+const MONTHS_FR=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+function calMove(d){
+  calMonth+=d;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  renderCalendar();
+}
+
+function renderCalendar(){
+  document.getElementById('cal-title').textContent=`${MONTHS_FR[calMonth]} ${calYear}`;
+  const today=now();
+  const firstDay=new Date(calYear,calMonth,1);
+  const lastDay=new Date(calYear,calMonth+1,0);
+  // Mon=0..Sun=6
+  const startOffset=(firstDay.getDay()||7)-1;
+  const totalCells=Math.ceil((startOffset+lastDay.getDate())/7)*7;
+
+  const cells=[];
+  for(let i=0;i<totalCells;i++){
+    const dayNum=i-startOffset+1;
+    const date=new Date(calYear,calMonth,dayNum);
+    const dateStr=date.toISOString().slice(0,10);
+    const isOther=dayNum<1||dayNum>lastDay.getDate();
+    const isToday=dateStr===today;
+
+    const events=calEventsForDay(dateStr);
+    cells.push({dateStr,dayNum:isOther?null:dayNum,isOther,isToday,events,date});
+  }
+
+  const grid=document.getElementById('cal-grid');
+  grid.innerHTML=cells.map(c=>{
+    const cls=['cal-cell',c.isOther?'other':'',c.isToday?'today':''].filter(Boolean).join(' ');
+    const evHtml=c.events.slice(0,4).map(e=>{
+      if(e.type==='task'){
+        const cc=CAT_COLORS[e.cat]||'#9e9e9e';
+        return`<span class="cal-tag" style="background:${cc}22;color:${cc};border:1px solid ${cc}44">${esc(e.label.slice(0,14))}</span>`;
+      }
+      return`<span class="cal-tag" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">${e.ico} ${esc(e.label.slice(0,12))}</span>`;
+    }).join('');
+    const more=c.events.length>4?`<span style="font-size:10px;color:var(--muted)">+${c.events.length-4}</span>`:'';
+    return`<div class="${cls}" onclick="openDay('${c.dateStr}')">
+      <div class="cal-dn">${c.dayNum??''}</div>
+      <div class="cal-events">${evHtml}${more}</div>
+    </div>`;
+  }).join('');
+}
+
+function calEventsForDay(dateStr){
+  const events=[];
+  S.tasks.filter(t=>t.due?.slice(0,10)===dateStr)
+    .forEach(t=>events.push({type:'task',label:t.title,cat:t.cat,ico:'📋',done:t.done}));
+  S.pets.forEach(p=>{
+    (p.vaccines||[]).filter(v=>v.next===dateStr).forEach(v=>events.push({type:'pet',label:`${p.name}: ${v.label}`,ico:'💉'}));
+    (p.treatments||[]).filter(t=>t.next===dateStr).forEach(t=>events.push({type:'pet',label:`${p.name}: ${t.label}`,ico:'💊'}));
+    (p.vet||[]).filter(v=>v.date===dateStr).forEach(v=>events.push({type:'pet',label:`${p.name}: ${v.label}`,ico:'🏥'}));
+  });
+  return events;
+}
+
+function openDay(dateStr){
+  const events=calEventsForDay(dateStr);
+  const d=new Date(dateStr+'T12:00:00');
+  document.getElementById('day-mh').textContent=d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  const el=document.getElementById('day-items');
+  if(!events.length){el.innerHTML='<div style="padding:20px 0;color:var(--muted);text-align:center">Aucun évènement ce jour</div>';
+  }else{
+    el.innerHTML=events.map(e=>{
+      const badge=e.done?'<span class="badge b-ok" style="font-size:10px">Fait</span>':'';
+      const cc=e.type==='task'?(CAT_COLORS[e.cat]||'#9e9e9e'):null;
+      const sub=e.type==='task'&&e.cat?`<span style="font-size:11px;color:${cc}">${CAT_ICONS[e.cat]||''} ${e.cat}</span>`:'';
+      return`<div class="day-item">
+        <div class="day-item-ico">${e.ico}</div>
+        <div class="day-item-info">
+          <div class="day-item-lbl">${esc(e.label)} ${badge}</div>
+          <div class="day-item-sub">${sub}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('day-ov').classList.remove('hide');
 }
 
 ['task-ov','member-ov','pet-ov','vacc-ov','treat-ov','vet-ov','weight-ov','confirm-ov'].forEach(id=>{
