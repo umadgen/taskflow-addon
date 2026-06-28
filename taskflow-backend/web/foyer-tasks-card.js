@@ -1084,6 +1084,13 @@ class FoyerTasksCard extends HTMLElement {
 
     let html = '';
 
+    const vac = data.vacation;
+    const today10 = today;
+    if (vac?.active) {
+      const vacUntil = vac.until ? new Date(vac.until + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
+      html += `<div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:8px 12px;margin-bottom:8px;border-radius:4px;font-size:12px;font-weight:600;color:#92400e">🏖 Mode vacances actif${vacUntil ? ' jusqu\'au ' + vacUntil : ''}</div>`;
+    }
+
     if (late.length) {
       html += `<div class="section-label">En retard</div>`;
       late.forEach(t => { html += this._rowHTML(t, members); });

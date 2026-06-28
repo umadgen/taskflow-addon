@@ -99,15 +99,17 @@ type Pet struct {
 }
 
 type Settings struct {
-	Theme         string `json:"theme"`
-	Accent        string `json:"accent"`
-	NotifTasks    bool   `json:"notifTasks"`
-	NotifPets     bool   `json:"notifPets"`
-	NotifAgenda   bool   `json:"notifAgenda"`
-	Sounds        bool   `json:"sounds"`
-	CurrentMember string `json:"currentMember"`
-	HouseholdName string `json:"householdName"`
-	Onboarded     bool   `json:"onboarded"`
+	Theme          string `json:"theme"`
+	Accent         string `json:"accent"`
+	NotifTasks     bool   `json:"notifTasks"`
+	NotifPets      bool   `json:"notifPets"`
+	NotifAgenda    bool   `json:"notifAgenda"`
+	Sounds         bool   `json:"sounds"`
+	CurrentMember  string `json:"currentMember"`
+	HouseholdName  string `json:"householdName"`
+	Onboarded      bool   `json:"onboarded"`
+	VacationMode   bool   `json:"vacationMode"`
+	VacationUntil  string `json:"vacationUntil"`
 }
 
 type GoogleEvent struct {

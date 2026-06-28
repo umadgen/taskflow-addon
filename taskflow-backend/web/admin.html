@@ -309,6 +309,16 @@
         <div class="fg"><label>Nom du foyer</label><input type="text" id="s-name" placeholder="Mon foyer"></div>
         <button class="btn btn-p" onclick="saveSettings()">Enregistrer</button>
       </div>
+      <div class="card" style="padding:24px" id="vacation-card">
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Mode vacances</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Les tâches récurrentes complétées pendant les vacances avancent automatiquement leur prochaine échéance après la date de retour.</div>
+        <div id="vacation-active-banner" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:600;color:#92400e">🏖 Mode vacances actif jusqu'au <span id="vacation-until-display"></span></div>
+        <div class="fg"><label>Date de retour</label><input type="date" id="v-until"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-p" onclick="activateVacation()">🏖 Activer les vacances</button>
+          <button class="btn btn-g" id="v-cancel-btn" style="display:none" onclick="deactivateVacation()">✕ Désactiver</button>
+        </div>
+      </div>
       <div class="card" style="padding:24px">
         <div style="font-size:15px;font-weight:700;margin-bottom:4px">Sauvegarde</div>
         <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Exporte toutes les données (tâches, membres, animaux, historique) dans un fichier JSON.</div>
@@ -1053,12 +1063,35 @@ function renderHistory(){
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
-function renderSettings(){document.getElementById('s-name').value=S.settings.householdName||'';}
+function renderSettings(){
+  document.getElementById('s-name').value=S.settings.householdName||'';
+  const vacOn=S.settings.vacationMode && S.settings.vacationUntil>=now();
+  document.getElementById('vacation-active-banner').style.display=vacOn?'block':'none';
+  document.getElementById('vacation-until-display').textContent=fdate(S.settings.vacationUntil);
+  document.getElementById('v-cancel-btn').style.display=vacOn?'inline-flex':'none';
+  if(S.settings.vacationUntil)document.getElementById('v-until').value=S.settings.vacationUntil;
+  document.getElementById('vacation-card').style.borderColor=vacOn?'#fcd34d':'';
+}
 async function saveSettings(){
   const body={householdName:document.getElementById('s-name').value.trim()};
   try{
     const r=await fetch('api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);await load();toast('Paramètres enregistrés');
+  }catch(e){toast('Erreur',true);}
+}
+async function activateVacation(){
+  const until=document.getElementById('v-until').value;
+  if(!until){toast('Choisissez une date de retour',true);return;}
+  if(until<=now()){toast('La date de retour doit être dans le futur',true);return;}
+  try{
+    const r=await fetch('api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vacationMode:true,vacationUntil:until})});
+    if(!r.ok)throw new Error(r.status);await load();toast('🏖 Mode vacances activé jusqu\'au '+fdate(until));
+  }catch(e){toast('Erreur',true);}
+}
+async function deactivateVacation(){
+  try{
+    const r=await fetch('api/settings',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vacationMode:false,vacationUntil:''})});
+    if(!r.ok)throw new Error(r.status);await load();toast('Mode vacances désactivé');
   }catch(e){toast('Erreur',true);}
 }
 

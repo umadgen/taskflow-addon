@@ -155,7 +155,8 @@ func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
 			log.Printf("ha-sensor: GetSnapshot: %v", err)
 			return
 		}
-		if err := publishHASensor(token, snap); err != nil {
+		settings, _ := database.GetSettings()
+		if err := publishHASensor(token, snap, settings); err != nil {
 			log.Printf("ha-sensor: publish: %v", err)
 		}
 	}
@@ -172,10 +173,14 @@ func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
 	}
 }
 
-func publishHASensor(token string, snap model.MQTTSnapshot) error {
+func publishHASensor(token string, snap model.MQTTSnapshot, settings model.Settings) error {
 	type payload struct {
 		State      string         `json:"state"`
 		Attributes map[string]any `json:"attributes"`
+	}
+	vacation := map[string]any{
+		"active": settings.VacationMode && settings.VacationUntil >= time.Now().Format("2006-01-02"),
+		"until":  settings.VacationUntil,
 	}
 	p := payload{
 		State: fmt.Sprintf("%d", snap.Seq),
@@ -183,6 +188,7 @@ func publishHASensor(token string, snap model.MQTTSnapshot) error {
 			"tasks":         snap.Tasks,
 			"members":       snap.Members,
 			"history":       snap.History,
+			"vacation":      vacation,
 			"friendly_name": "Foyer Snapshot",
 		},
 	}
