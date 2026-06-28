@@ -79,8 +79,9 @@ func (d *DB) migrate() error {
 	if err != nil {
 		return err
 	}
-	// Migration for existing DBs: add avatar column if absent (error ignored when already present)
+	// Migrations for existing DBs (errors ignored when column already present)
 	d.sql.Exec(`ALTER TABLE members ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
+	d.sql.Exec(`ALTER TABLE tasks ADD COLUMN checklist TEXT NOT NULL DEFAULT '[]'`)
 	return nil
 }
 
@@ -137,7 +138,7 @@ func (d *DB) DeleteMember(id string) error {
 func (d *DB) GetTasks() ([]model.Task, error) {
 	rows, err := d.sql.Query(`
 		SELECT id, title, cat, assignee, done, done_by, done_at,
-		       due, late, recurring, repeat, week_days, month_day, time, freq_text
+		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist
 		FROM tasks ORDER BY due`)
 	if err != nil {
 		return nil, err
@@ -160,7 +161,7 @@ func (d *DB) GetTasks() ([]model.Task, error) {
 func (d *DB) GetTask(id string) (*model.Task, error) {
 	rows, err := d.sql.Query(`
 		SELECT id, title, cat, assignee, done, done_by, done_at,
-		       due, late, recurring, repeat, week_days, month_day, time, freq_text
+		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist
 		FROM tasks WHERE id = ?`, id)
 	if err != nil {
 		return nil, err
@@ -179,12 +180,13 @@ func (d *DB) GetTask(id string) (*model.Task, error) {
 func scanTask(rows *sql.Rows) (model.Task, error) {
 	var t model.Task
 	var done, late, recurring int
-	var weekDaysJSON sql.NullString
+	var weekDaysJSON, checklistJSON sql.NullString
 	err := rows.Scan(
 		&t.ID, &t.Title, &t.Cat,
 		&t.Assignee, &done, &t.DoneBy, &t.DoneAt,
 		&t.Due, &late, &recurring,
 		&t.Repeat, &weekDaysJSON, &t.MonthDay, &t.Time, &t.FreqText,
+		&checklistJSON,
 	)
 	if err != nil {
 		return t, err
@@ -198,25 +200,32 @@ func scanTask(rows *sql.Rows) (model.Task, error) {
 	if t.WeekDays == nil {
 		t.WeekDays = []int{}
 	}
+	if checklistJSON.Valid && checklistJSON.String != "" && checklistJSON.String != "null" {
+		_ = json.Unmarshal([]byte(checklistJSON.String), &t.Checklist)
+	}
+	if t.Checklist == nil {
+		t.Checklist = []model.ChecklistItem{}
+	}
 	return t, nil
 }
 
 func (d *DB) UpsertTask(t model.Task) error {
 	wdJSON, _ := json.Marshal(t.WeekDays)
+	clJSON, _ := json.Marshal(t.Checklist)
 	_, err := d.sql.Exec(`
 		INSERT INTO tasks
-		  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		  title=excluded.title, cat=excluded.cat, assignee=excluded.assignee,
 		  done=excluded.done, done_by=excluded.done_by, done_at=excluded.done_at,
 		  due=excluded.due, late=excluded.late, recurring=excluded.recurring,
 		  repeat=excluded.repeat, week_days=excluded.week_days, month_day=excluded.month_day,
-		  time=excluded.time, freq_text=excluded.freq_text`,
+		  time=excluded.time, freq_text=excluded.freq_text, checklist=excluded.checklist`,
 		t.ID, t.Title, t.Cat,
 		t.Assignee, boolInt(t.Done), t.DoneBy, t.DoneAt,
 		t.Due, boolInt(t.Late), boolInt(t.Recurring),
-		t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText,
+		t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText, string(clJSON),
 	)
 	return err
 }

@@ -1231,13 +1231,19 @@ class FoyerTasksCard extends HTMLElement {
       metaLine = `À prendre${dueTime}`;
     }
 
+    const cl = task.checklist ?? [];
+    const clDone = cl.filter(x => x.done).length;
+    const clBadge = cl.length
+      ? `<span style="font-size:10px;padding:1px 6px;border-radius:999px;background:${clDone===cl.length?'#d1fae5':clDone>0?'#dbeafe':'#f3f4f6'};color:${clDone===cl.length?'#065f46':clDone>0?'#1d4ed8':'#6b7280'};font-weight:600;border:1px solid ${clDone===cl.length?'#a7f3d0':clDone>0?'#bfdbfe':'#e5e7eb'}">📋 ${clDone}/${cl.length}</span>`
+      : '';
+
     const rowClass = isDone ? ' done' : isUpcoming ? ' upcoming' : '';
     const inner = `
       <div class="task-row${rowClass}" data-task="${this._esc(task.id)}">
         <div class="cat-bar" style="background:${catColor}"></div>
         <span class="task-icon">${icon}</span>
         <div class="task-body">
-          <span class="${isDone ? 'task-name striked' : 'task-name'}">${this._esc(task.title)}${lateBadge}</span>
+          <span class="${isDone ? 'task-name striked' : 'task-name'}">${this._esc(task.title)}${lateBadge}${clBadge ? ' ' + clBadge : ''}</span>
           <span class="task-meta">${metaLine}</span>
           ${task.note && !isUpcoming ? `<span class="task-note">${this._esc(task.note)}</span>` : ''}
           ${recurLabel && !isUpcoming ? `<span class="task-recur">${this._esc(recurLabel)}</span>` : ''}

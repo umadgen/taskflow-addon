@@ -19,22 +19,29 @@ type Member struct {
 	Avatar  string `json:"avatar"`
 }
 
+type ChecklistItem struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	Done bool   `json:"done"`
+}
+
 type Task struct {
-	ID        string  `json:"id"`
-	Title     string  `json:"title"`
-	Cat       string  `json:"cat"`
-	Assignee  *string `json:"assignee"`
-	Done      bool    `json:"done"`
-	DoneBy    *string `json:"doneBy,omitempty"`
-	DoneAt    *string `json:"doneAt,omitempty"`
-	Due       string  `json:"due"`
-	Late      bool    `json:"late"`
-	Recurring bool    `json:"recurring"`
-	Repeat    *string `json:"repeat,omitempty"`
-	WeekDays  []int   `json:"weekDays,omitempty"`
-	MonthDay  *int    `json:"monthDay,omitempty"`
-	Time      *string `json:"time,omitempty"`
-	FreqText  *string `json:"freqText,omitempty"`
+	ID        string          `json:"id"`
+	Title     string          `json:"title"`
+	Cat       string          `json:"cat"`
+	Assignee  *string         `json:"assignee"`
+	Done      bool            `json:"done"`
+	DoneBy    *string         `json:"doneBy,omitempty"`
+	DoneAt    *string         `json:"doneAt,omitempty"`
+	Due       string          `json:"due"`
+	Late      bool            `json:"late"`
+	Recurring bool            `json:"recurring"`
+	Repeat    *string         `json:"repeat,omitempty"`
+	WeekDays  []int           `json:"weekDays,omitempty"`
+	MonthDay  *int            `json:"monthDay,omitempty"`
+	Time      *string         `json:"time,omitempty"`
+	FreqText  *string         `json:"freqText,omitempty"`
+	Checklist []ChecklistItem `json:"checklist,omitempty"`
 }
 
 type HistoryEntry struct {

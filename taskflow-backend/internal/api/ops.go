@@ -11,9 +11,11 @@ import (
 type opsRequest struct {
 	Type     string          `json:"type"`
 	ID       string          `json:"id"`
+	ItemID   string          `json:"itemId"`
 	MemberID string          `json:"memberId"`
 	At       string          `json:"at"`
 	HistID   string          `json:"histId"`
+	NewID    string          `json:"newId"`
 	Task     json.RawMessage `json:"task"`
 	Patch    json.RawMessage `json:"patch"`
 	Member   json.RawMessage `json:"member"`
@@ -176,6 +178,35 @@ func (h *Handler) handleOps(w http.ResponseWriter, r *http.Request) {
 
 	case "deleteMember":
 		if err = h.db.DeleteMember(op.ID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		seq, _ = h.db.IncrSeq()
+		go h.notify(seq)
+
+	case "toggleChecklistItem":
+		task, err2 := h.db.GetTask(op.ID)
+		if err2 != nil {
+			writeError(w, http.StatusInternalServerError, err2.Error())
+			return
+		}
+		if task == nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		found := false
+		for i := range task.Checklist {
+			if task.Checklist[i].ID == op.ItemID {
+				task.Checklist[i].Done = !task.Checklist[i].Done
+				found = true
+				break
+			}
+		}
+		if !found {
+			writeError(w, http.StatusNotFound, "checklist item not found")
+			return
+		}
+		if err = h.db.UpsertTask(*task); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
