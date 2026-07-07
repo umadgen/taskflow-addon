@@ -17,12 +17,12 @@
 //      title: Progression du foyer          # optionnel
 // ============================================================================
 
-const FOYER_VERSION = '1.8.0';
+const FOYER_VERSION = '1.8.1';
 
 const FOYER_CAT_ICONS   = { maison: '🏠', courses: '🛒', animaux: '🐾' };
 const FOYER_CAT_COLORS  = { maison: '#26a69a', courses: '#ff7043', animaux: '#ab47bc' };
 const FOYER_TONE_COLORS = {
-  rose: '#e91e63', peach: '#ff7043', amber: '#ffa000',
+  rose: '#ec4899', peach: '#ff7043', amber: '#ffa000',
   mint: '#00897b', sky: '#039be5', lilac: '#7e57c2',
 };
 
@@ -564,6 +564,18 @@ class FoyerTasksCard extends HTMLElement {
           margin-bottom: 24px;
           box-sizing: border-box;
         }
+        .date-row { margin-bottom: 20px; }
+        .create-date-input {
+          width: 100%;
+          border: 2px solid var(--divider-color, rgba(0,0,0,.1));
+          border-radius: 8px;
+          background: var(--secondary-background-color, rgba(0,0,0,.03));
+          padding: 10px 12px;
+          font-size: 15px;
+          color: var(--primary-text-color);
+          outline: none;
+          box-sizing: border-box;
+        }
         .create-submit {
           width: 100%;
           padding: 14px;
@@ -598,47 +610,6 @@ class FoyerTasksCard extends HTMLElement {
           display: flex; align-items: center; justify-content: center;
           font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0;
         }
-
-        /* ── Swipe to complete ── */
-        .swipe-wrap { position: relative; overflow: hidden; border-radius: 16px; }
-        .swipe-bg {
-          position: absolute; inset: 0;
-          background: var(--success-color, #4caf50);
-          display: flex; align-items: center; padding-left: 24px;
-          color: #fff; font-size: 22px; font-weight: 700;
-          opacity: 0; pointer-events: none; user-select: none;
-        }
-        .swipe-wrap .task-row { position: relative; will-change: transform; }
-        .swipe-wrap .task-row.snapping { transition: transform .2s ease; }
-
-        /* ── Quick "Qui ?" picker ── */
-        .qpick-overlay {
-          position: fixed; inset: 0; background: rgba(0,0,0,.45);
-          z-index: 9999; display: flex; align-items: flex-end; justify-content: center;
-          opacity: 0; pointer-events: none; transition: opacity .15s ease;
-        }
-        .qpick-overlay.open { opacity: 1; pointer-events: auto; }
-        .qpick-modal {
-          background: var(--card-background-color);
-          border-radius: 24px 24px 0 0; padding: 16px 20px 40px;
-          width: 100%; max-width: 480px;
-          transform: translateY(32px); transition: transform .2s cubic-bezier(.34,1.56,.64,1);
-        }
-        .qpick-overlay.open .qpick-modal { transform: translateY(0); }
-        .qpick-title {
-          font-size: 13px; font-weight: 600; color: var(--secondary-text-color);
-          text-transform: uppercase; letter-spacing: .06em; margin-bottom: 18px; padding: 0 2px;
-        }
-        .qpick-members { display: flex; gap: 20px; flex-wrap: wrap; padding: 0 2px; }
-        .qpick-member { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-        .qpick-avatar {
-          width: 54px; height: 54px; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 20px; font-weight: 700; color: #fff;
-          transition: transform .1s;
-        }
-        .qpick-avatar:active { transform: scale(.88); }
-        .qpick-name { font-size: 12px; color: var(--secondary-text-color); }
 
         /* ── Members overlay ── */
         .members-btn {
@@ -884,6 +855,11 @@ class FoyerTasksCard extends HTMLElement {
             <span>de chaque mois</span>
           </div>
 
+          <div class="date-row hidden-field">
+            <span class="create-field-label">Date</span>
+            <input class="create-date-input" type="date" />
+          </div>
+
           <span class="create-field-label">Heure</span>
           <input class="create-time-input" type="time" value="18:00" />
 
@@ -911,14 +887,6 @@ class FoyerTasksCard extends HTMLElement {
         </div>
       </div>
 
-      <div class="qpick-overlay">
-        <div class="qpick-modal">
-          <div class="modal-drag"></div>
-          <div class="qpick-title">Qui a complété cette tâche ?</div>
-          <div class="qpick-members"></div>
-        </div>
-      </div>
-
       <div class="members-overlay">
         <div class="members-modal">
           <div class="modal-drag"></div>
@@ -943,7 +911,7 @@ class FoyerTasksCard extends HTMLElement {
           <span class="mform-label">Couleur</span>
           <div class="tone-row">
             <div class="tone-swatch active" data-tone="sky"    style="background:#0ea5e9"></div>
-            <div class="tone-swatch"        data-tone="rose"   style="background:#f43f5e"></div>
+            <div class="tone-swatch"        data-tone="rose"   style="background:#ec4899"></div>
             <div class="tone-swatch"        data-tone="peach"  style="background:#fb923c"></div>
             <div class="tone-swatch"        data-tone="amber"  style="background:#f59e0b"></div>
             <div class="tone-swatch"        data-tone="mint"   style="background:#10b981"></div>
@@ -975,6 +943,7 @@ class FoyerTasksCard extends HTMLElement {
       const r = c.dataset.repeat;
       co.querySelector('.wd-row').classList.toggle('hidden-field', r !== 'semaine');
       co.querySelector('.monthday-row').classList.toggle('hidden-field', r !== 'mois');
+      co.querySelector('.date-row').classList.toggle('hidden-field', r !== 'once');
     }));
     co.querySelectorAll('.wd-btn').forEach(b => b.addEventListener('click', () => b.classList.toggle('active')));
     this.shadowRoot.querySelector('.create-submit').addEventListener('click', () => this._submitCreateTask());
@@ -986,10 +955,6 @@ class FoyerTasksCard extends HTMLElement {
     this.shadowRoot.querySelector('.ctx-skip').addEventListener('click', () => this._ctxSkip());
     this.shadowRoot.querySelector('.ctx-edit').addEventListener('click', () => this._ctxEdit());
     this.shadowRoot.querySelector('.ctx-delete').addEventListener('click', () => this._ctxDelete());
-
-    // Quick picker
-    const qp = this.shadowRoot.querySelector('.qpick-overlay');
-    qp.addEventListener('click', e => { if (e.target === qp) this._closeQuickPicker(); });
 
     // Members
     this.shadowRoot.querySelector('.members-btn').addEventListener('click', () => this._openMembers());
@@ -1120,66 +1085,37 @@ class FoyerTasksCard extends HTMLElement {
 
     listEl.innerHTML = html;
 
-    listEl.querySelectorAll('.swipe-wrap').forEach(wrap => {
-      const row  = wrap.querySelector('.task-row');
-      const bg   = wrap.querySelector('.swipe-bg');
-      const task = tasks.find(t => t.id === row?.dataset.task);
-      if (!task) return;
+    listEl.querySelectorAll('.task-row').forEach(row => {
+      const task = tasks.find(t => t.id === row.dataset.task);
+      if (!task || task.done) return;
 
-      const SWIPE_TRIGGER = 110;
-      let startX = 0, startY = 0, curDx = 0;
-      let pressTimer = null, didLongPress = false, swipeMode = false;
+      let startX = 0, startY = 0, pressTimer = null, didLongPress = false, moved = false;
 
       const onTouchStart = e => {
         startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-        curDx = 0; swipeMode = false; didLongPress = false;
+        didLongPress = false; moved = false;
         pressTimer = setTimeout(() => {
-          if (!swipeMode) { didLongPress = true; row.classList.add('pressing'); this._openCtx(task); }
+          if (!moved) { didLongPress = true; row.classList.add('pressing'); this._openCtx(task); }
         }, 480);
       };
       const onTouchMove = e => {
         const dx = e.touches[0].clientX - startX;
         const dy = e.touches[0].clientY - startY;
-        if (!swipeMode && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-          clearTimeout(pressTimer); swipeMode = true;
-        }
-        if (swipeMode && dx > 0) {
-          curDx = Math.min(dx, 180);
-          row.style.transform = `translateX(${curDx}px)`;
-          bg.style.opacity    = Math.min(curDx / SWIPE_TRIGGER, 1);
+        if (!moved && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+          moved = true; clearTimeout(pressTimer); row.classList.remove('pressing');
         }
       };
-      const onTouchEnd = () => {
-        clearTimeout(pressTimer); row.classList.remove('pressing');
-        if (swipeMode) {
-          if (curDx >= SWIPE_TRIGGER) {
-            row.classList.add('snapping');
-            row.style.transform = 'translateX(110%)';
-            bg.style.opacity = '1';
-            setTimeout(() => {
-              row.classList.remove('snapping');
-              row.style.transform = ''; bg.style.opacity = '0';
-              this._openQuickPicker(task);
-            }, 220);
-          } else {
-            row.classList.add('snapping');
-            row.style.transform = ''; bg.style.opacity = '0';
-            setTimeout(() => row.classList.remove('snapping'), 220);
-          }
-          swipeMode = false; curDx = 0;
-        }
-      };
+      const onTouchEnd = () => { clearTimeout(pressTimer); row.classList.remove('pressing'); };
 
-      wrap.addEventListener('touchstart', onTouchStart, { passive: true });
-      wrap.addEventListener('touchmove',  onTouchMove,  { passive: true });
-      wrap.addEventListener('touchend',   onTouchEnd);
+      row.addEventListener('touchstart', onTouchStart, { passive: true });
+      row.addEventListener('touchmove',  onTouchMove,  { passive: true });
+      row.addEventListener('touchend',   onTouchEnd);
       // Desktop long press on the row itself
       row.addEventListener('mousedown',  () => { didLongPress = false; pressTimer = setTimeout(() => { didLongPress = true; row.classList.add('pressing'); this._openCtx(task); }, 480); });
       row.addEventListener('mouseup',    () => { clearTimeout(pressTimer); row.classList.remove('pressing'); });
       row.addEventListener('mouseleave', () => { clearTimeout(pressTimer); row.classList.remove('pressing'); });
       row.addEventListener('click', () => {
         if (didLongPress) { didLongPress = false; return; }
-        if (swipeMode) return;
         this._openModal(task, members);
       });
     });
@@ -1214,7 +1150,9 @@ class FoyerTasksCard extends HTMLElement {
 
   // ── Row HTML ───────────────────────────────────────────────────────────────
   _rowHTML(task, members, isUpcoming = false) {
-    const assignee  = members.find(m => m.id === task.assignee);
+    const assignee  = task.done
+      ? (members.find(m => m.id === task.doneBy) ?? members.find(m => m.id === task.assignee))
+      : members.find(m => m.id === task.assignee);
     const icon      = FOYER_CAT_ICONS[task.cat]  ?? '📋';
     const catColor  = FOYER_CAT_COLORS[task.cat] ?? '#888';
     const lateBadge = task.late ? '<span class="late-badge">Retard</span>' : '';
@@ -1259,7 +1197,7 @@ class FoyerTasksCard extends HTMLElement {
         <span class="task-chevron">${isDone ? '✓' : '›'}</span>
       </div>
     `;
-    return isDone ? inner : `<div class="swipe-wrap"><div class="swipe-bg">✓</div>${inner}</div>`;
+    return inner;
   }
 
   // ── Upcoming compact row ──────────────────────────────────────────────────
@@ -1287,7 +1225,9 @@ class FoyerTasksCard extends HTMLElement {
     co.querySelectorAll('.wd-btn').forEach(b => b.classList.toggle('active', (task?.weekDays ?? []).includes(Number(b.dataset.wd))));
     co.querySelector('.wd-row').classList.toggle('hidden-field', repeat !== 'semaine');
     co.querySelector('.monthday-row').classList.toggle('hidden-field', repeat !== 'mois');
+    co.querySelector('.date-row').classList.toggle('hidden-field', repeat !== 'once');
     co.querySelector('.monthday-input').value = task?.monthDay ?? 1;
+    co.querySelector('.create-date-input').value = task?.due?.slice(0, 10) || new Date().toISOString().slice(0, 10);
     co.querySelector('.create-time-input').value = task?.time ?? '18:00';
     co.querySelector('.create-note-input').value  = task?.note ?? '';
     // Populate assignee chips dynamically
@@ -1358,39 +1298,9 @@ class FoyerTasksCard extends HTMLElement {
     await this._callApi({ type: 'deleteTask', id: task.id });
   }
 
-  // ── Quick picker (swipe to complete) ────────────────────────────────────
-  _openQuickPicker(task) {
-    this._pickingTask = task;
-    const members = this._getData()?.members ?? [];
-    const qm = this.shadowRoot.querySelector('.qpick-members');
-    qm.innerHTML = members.map(m => `
-      <div class="qpick-member" data-member="${this._esc(m.id)}">
-        <div class="qpick-avatar" style="background:${FoyerTasksCard._TONE_CSS[m.tone] ?? '#888'}">${this._esc(m.initial)}</div>
-        <span class="qpick-name">${this._esc(m.name)}</span>
-      </div>`).join('');
-    qm.querySelectorAll('.qpick-member').forEach(el =>
-      el.addEventListener('click', () => this._completeTask(task, el.dataset.member))
-    );
-    this.shadowRoot.querySelector('.qpick-overlay').classList.add('open');
-  }
-
-  _closeQuickPicker() {
-    this.shadowRoot.querySelector('.qpick-overlay').classList.remove('open');
-    this._pickingTask = null;
-  }
-
-  async _completeTask(task, memberId) {
-    this._closeQuickPicker();
-    await this._callApi({
-      type: 'completeTask', id: task.id, memberId,
-      at: new Date().toISOString().slice(0, 16),
-      newId: this._newId(), histId: this._newId(),
-    });
-  }
-
   // ── Members management ───────────────────────────────────────────────────
   static get _TONE_CSS() {
-    return { rose:'#f43f5e', peach:'#fb923c', amber:'#f59e0b', mint:'#10b981', sky:'#0ea5e9', lilac:'#a78bfa' };
+    return { rose:'#ec4899', peach:'#fb923c', amber:'#f59e0b', mint:'#10b981', sky:'#0ea5e9', lilac:'#a78bfa' };
   }
 
   _openMembers() {
@@ -1515,7 +1425,8 @@ class FoyerTasksCard extends HTMLElement {
     }
 
     const monthDay = repeat === 'mois' ? (Number(co.querySelector('.monthday-input').value) || 1) : 1;
-    const due      = this._firstDue(repeat, weekDays, monthDay, time);
+    const date     = repeat === 'once' ? co.querySelector('.create-date-input').value : '';
+    const due      = this._firstDue(repeat, weekDays, monthDay, time, date);
     const freqText = this._freqText(repeat, weekDays, monthDay, time);
     const id       = this._newId();
 
@@ -1555,10 +1466,11 @@ class FoyerTasksCard extends HTMLElement {
     return d.toISOString().slice(0, 10);
   }
 
-  _firstDue(repeat, weekDays, monthDay, time) {
+  _firstDue(repeat, weekDays, monthDay, time, date = '') {
     const today  = new Date().toISOString().slice(0, 10);
     const appWd  = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
-    if (repeat === 'once' || repeat === 'jour') return `${today}T${time}`;
+    if (repeat === 'once') return `${date || today}T${time}`;
+    if (repeat === 'jour') return `${today}T${time}`;
     if (repeat === 'semaine') {
       let d = today;
       for (let i = 0; i < 7; i++) {
