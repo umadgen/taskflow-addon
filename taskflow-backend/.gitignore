@@ -1,3 +1,4 @@
 foyer-go.exe
 foyer-go
 *.exe
+foyer.sqlite*

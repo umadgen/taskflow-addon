@@ -44,6 +44,7 @@ func (h *Handler) Mount(r chi.Router) {
 		r.Route("/tasks", func(r chi.Router) {
 			r.Get("/", h.listTasks)
 			r.Post("/", h.createTask)
+			r.Post("/bulk", h.bulkCreateTasks)
 			r.Patch("/{id}", h.updateTask)
 			r.Delete("/{id}", h.deleteTask)
 			r.Post("/{id}/complete", h.completeTask)
