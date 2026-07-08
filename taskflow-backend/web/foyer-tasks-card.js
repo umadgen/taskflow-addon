@@ -50,6 +50,12 @@ class FoyerTasksCard extends HTMLElement {
     this._pendingTask = null;
     this._seq         = null;
     this._rendered    = false;
+    this._today       = null;
+    this._dayTimer    = null;
+  }
+
+  disconnectedCallback() {
+    if (this._dayTimer) clearInterval(this._dayTimer);
   }
 
   setConfig(config) {
@@ -982,7 +988,18 @@ class FoyerTasksCard extends HTMLElement {
 
     this._rendered = true;
     this._seq = this._hass?.states[this._config.foyer_sensor]?.state;
+    this._today = new Date().toISOString().slice(0, 10);
     this._renderTasks();
+
+    // The sensor's state only changes on task/member mutations, so a card left
+    // open across midnight with no activity would keep showing yesterday's
+    // "today/late" bucketing. Poll for the date rollover and force a re-render.
+    if (!this._dayTimer) {
+      this._dayTimer = setInterval(() => {
+        const d = new Date().toISOString().slice(0, 10);
+        if (d !== this._today) { this._today = d; this._renderTasks(); }
+      }, 60000);
+    }
   }
 
   // ── Task list render ───────────────────────────────────────────────────────
