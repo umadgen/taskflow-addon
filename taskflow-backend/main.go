@@ -10,6 +10,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	chi "github.com/go-chi/chi/v5"
@@ -31,13 +33,28 @@ var petsCardJS []byte
 //go:embed web/admin.html
 var adminHTML []byte
 
+//go:embed config.yaml
+var configYAML []byte
+
 const (
-	cardDest     = "/config/www/taskflow/foyer-tasks-card.js"
-	cardURL      = "/local/taskflow/foyer-tasks-card.js"
-	petsCardDest = "/config/www/taskflow/foyer-pets-card.js"
-	petsCardURL  = "/local/taskflow/foyer-pets-card.js"
+	cardDest      = "/config/www/taskflow/foyer-tasks-card.js"
+	cardPath      = "/local/taskflow/foyer-tasks-card.js"
+	petsCardDest  = "/config/www/taskflow/foyer-pets-card.js"
+	petsCardPath  = "/local/taskflow/foyer-pets-card.js"
 	supervisorAPI = "http://supervisor/core/api"
 )
+
+// addonVersion reads the version from the embedded config.yaml so the
+// Lovelace resource URLs below can be cache-busted with "?v=<version>".
+// Without this, browsers keep executing a stale cached copy of the card
+// JS after an update, since the resource URL never otherwise changes.
+func addonVersion() string {
+	m := regexp.MustCompile(`(?m)^version:\s*"([^"]+)"`).FindSubmatch(configYAML)
+	if m == nil {
+		return "0"
+	}
+	return string(m[1])
+}
 
 func main() {
 	dbPath    := env("FOYER_DB", "./foyer.sqlite")
@@ -112,8 +129,9 @@ func bootstrap(token string) {
 		log.Printf("bootstrap: SUPERVISOR_TOKEN absent, enregistrement Lovelace ignoré")
 		return
 	}
-	registerLovelaceResource(token, cardURL)
-	registerLovelaceResource(token, petsCardURL)
+	v := addonVersion()
+	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", cardPath, v))
+	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", petsCardPath, v))
 
 	// First install only: restart HA Core so it registers the /local/ static route.
 	// The marker file persists in /data/ (add-on data volume) across restarts.
@@ -210,10 +228,17 @@ func publishHASensor(token string, snap model.MQTTSnapshot, settings model.Setti
 	return nil
 }
 
+// resourcePath strips the "?v=..." cache-busting suffix so resources
+// registered under an older/unversioned URL can still be matched by path.
+func resourcePath(url string) string {
+	return strings.SplitN(url, "?", 2)[0]
+}
+
 func registerLovelaceResource(token, url string) {
 	client := &http.Client{}
+	path := resourcePath(url)
 
-	// Vérifier si la ressource est déjà enregistrée
+	// Vérifier si la ressource est déjà enregistrée (avec la même version)
 	req, _ := http.NewRequest("GET", supervisorAPI+"/lovelace/resources", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
@@ -224,13 +249,27 @@ func registerLovelaceResource(token, url string) {
 	defer resp.Body.Close()
 
 	var resources []struct {
+		ID  string `json:"id"`
 		URL string `json:"url"`
 	}
 	json.NewDecoder(resp.Body).Decode(&resources)
 	for _, r := range resources {
 		if r.URL == url {
-			log.Printf("bootstrap: ressource Lovelace déjà enregistrée")
+			log.Printf("bootstrap: ressource Lovelace déjà à jour (%s)", url)
 			return
+		}
+		if resourcePath(r.URL) == path {
+			// Une version antérieure est enregistrée sous la même URL de base :
+			// on la supprime pour forcer le navigateur à recharger le module
+			// (sinon l'URL ne change jamais et le JS reste caché indéfiniment).
+			delReq, _ := http.NewRequest("DELETE", supervisorAPI+"/lovelace/resources/"+r.ID, nil)
+			delReq.Header.Set("Authorization", "Bearer "+token)
+			if delResp, delErr := client.Do(delReq); delErr != nil {
+				log.Printf("bootstrap: suppression ancienne ressource: %v", delErr)
+			} else {
+				delResp.Body.Close()
+				log.Printf("bootstrap: ancienne ressource Lovelace supprimée (%s)", r.URL)
+			}
 		}
 	}
 
