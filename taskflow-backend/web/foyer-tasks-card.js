@@ -1536,7 +1536,7 @@ class FoyerTasksCard extends HTMLElement {
     this._closeModal();
     this._callApi({
       type: 'completeTask', id: task.id, memberId,
-      at: new Date().toISOString().slice(0, 16),
+      at: new Date().toISOString(),
       newId: this._newId(), histId: this._newId(),
     });
     const row = this.shadowRoot.querySelector(`[data-task="${task.id}"]`);
