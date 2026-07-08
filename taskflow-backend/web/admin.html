@@ -1243,7 +1243,10 @@ function computeNext(last,every){
 function fdate(iso){
   if(!iso)return'—';
   try{
-    const d=new Date(iso.length===10?iso+'T12:00:00':iso);
+    // Legacy entries (pre-1.6.7) were stored without a timezone marker
+    // (e.g. "2026-07-08T18:13"), parsed by JS as local time instead of UTC.
+    const needsUtc = iso.length>10 && !/[Zz]|[+-]\d{2}:?\d{2}$/.test(iso);
+    const d=new Date(iso.length===10?iso+'T12:00:00':needsUtc?iso+'Z':iso);
     const s=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
     if(iso.length>10){const t=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});return`${s} ${t}`;}
     return s;

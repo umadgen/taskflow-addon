@@ -29,8 +29,17 @@ const FOYER_TONE_COLORS = {
 function foyerEsc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function foyerParseAt(iso) {
+  // Legacy entries (pre-1.6.7) were stored without a timezone marker (e.g.
+  // "2026-07-08T18:13"), which JS parses as *local* time instead of UTC.
+  // Treat any datetime string lacking an explicit offset as UTC.
+  if (typeof iso === 'string' && iso.includes('T') && !/[Zz]|[+-]\d{2}:?\d{2}$/.test(iso)) {
+    return new Date(iso + 'Z');
+  }
+  return new Date(iso);
+}
 function foyerFormatAt(iso) {
-  const d = new Date(iso), now = new Date(), opts = { day:'numeric', month:'long' };
+  const d = foyerParseAt(iso), now = new Date(), opts = { day:'numeric', month:'long' };
   const today = now.toLocaleDateString('fr-FR', opts);
   const yest  = new Date(now - 864e5).toLocaleDateString('fr-FR', opts);
   const ds    = d.toLocaleDateString('fr-FR', opts);
@@ -1571,7 +1580,7 @@ class FoyerTasksCard extends HTMLElement {
   }
 
   _formatAt(isoString) {
-    const date = new Date(isoString);
+    const date = foyerParseAt(isoString);
     const now  = new Date();
     const opts = { day: 'numeric', month: 'long' };
     const todayStr     = now.toLocaleDateString('fr-FR', opts);
