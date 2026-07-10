@@ -29,6 +29,19 @@ const FOYER_TONE_COLORS = {
 function foyerEsc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function foyerToday() {
+  // Local calendar date (not UTC) — France is always ahead of UTC, so a
+  // UTC-based "today" lags behind the real local day for 1-2h after midnight.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function foyerLocalDateOf(iso) {
+  // History "at" values are UTC instants (see foyerParseAt); convert to the
+  // local calendar day before comparing against a local "today"/"weekStart".
+  if (!iso) return '';
+  const d = foyerParseAt(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function foyerParseAt(iso) {
   // Legacy entries (pre-1.6.7) were stored without a timezone marker (e.g.
   // "2026-07-08T18:13"), which JS parses as *local* time instead of UTC.
@@ -63,8 +76,23 @@ class FoyerTasksCard extends HTMLElement {
     this._dayTimer    = null;
   }
 
+  connectedCallback() {
+    // HA/Lovelace can detach and reattach this element (view switches, dashboard
+    // relayout) without recreating it, which would otherwise leave the day-change
+    // poller dead forever since disconnectedCallback tears it down below.
+    this._startDayTimer();
+  }
+
   disconnectedCallback() {
-    if (this._dayTimer) clearInterval(this._dayTimer);
+    if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
+  }
+
+  _startDayTimer() {
+    if (this._dayTimer || !this._rendered) return;
+    this._dayTimer = setInterval(() => {
+      const d = foyerToday();
+      if (d !== this._today) { this._today = d; this._renderTasks(); }
+    }, 60000);
   }
 
   setConfig(config) {
@@ -997,18 +1025,13 @@ class FoyerTasksCard extends HTMLElement {
 
     this._rendered = true;
     this._seq = this._hass?.states[this._config.foyer_sensor]?.state;
-    this._today = new Date().toISOString().slice(0, 10);
+    this._today = foyerToday();
     this._renderTasks();
 
     // The sensor's state only changes on task/member mutations, so a card left
     // open across midnight with no activity would keep showing yesterday's
     // "today/late" bucketing. Poll for the date rollover and force a re-render.
-    if (!this._dayTimer) {
-      this._dayTimer = setInterval(() => {
-        const d = new Date().toISOString().slice(0, 10);
-        if (d !== this._today) { this._today = d; this._renderTasks(); }
-      }, 60000);
-    }
+    this._startDayTimer();
   }
 
   // ── Task list render ───────────────────────────────────────────────────────
@@ -1024,7 +1047,7 @@ class FoyerTasksCard extends HTMLElement {
     }
 
     const { tasks, members, history } = data;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = foyerToday();
 
     // ── Filter bar ─────────────────────────────────────────────────────────
     if (!this._filter) this._filter = 'all';
@@ -1147,7 +1170,7 @@ class FoyerTasksCard extends HTMLElement {
     });
 
     // Progress = pending urgent + completions today (from history, covers recurring)
-    const todayHistDone = (history ?? []).filter(h => h.at?.slice(0, 10) === today);
+    const todayHistDone = (history ?? []).filter(h => foyerLocalDateOf(h.at) === today);
     const urgentTotal = late.length + todayT.length + todayHistDone.length;
     const urgentDone  = todayHistDone.length;
     this._setHeader(urgentDone, urgentTotal, late.length);
@@ -1253,7 +1276,7 @@ class FoyerTasksCard extends HTMLElement {
     co.querySelector('.monthday-row').classList.toggle('hidden-field', repeat !== 'mois');
     co.querySelector('.date-row').classList.toggle('hidden-field', repeat !== 'once');
     co.querySelector('.monthday-input').value = task?.monthDay ?? 1;
-    co.querySelector('.create-date-input').value = task?.due?.slice(0, 10) || new Date().toISOString().slice(0, 10);
+    co.querySelector('.create-date-input').value = task?.due?.slice(0, 10) || foyerToday();
     co.querySelector('.create-time-input').value = task?.time ?? '18:00';
     co.querySelector('.create-note-input').value  = task?.note ?? '';
     // Populate assignee chips dynamically
@@ -1493,7 +1516,7 @@ class FoyerTasksCard extends HTMLElement {
   }
 
   _firstDue(repeat, weekDays, monthDay, time, date = '') {
-    const today  = new Date().toISOString().slice(0, 10);
+    const today  = foyerToday();
     const appWd  = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
     if (repeat === 'once') return `${date || today}T${time}`;
     if (repeat === 'jour') return `${today}T${time}`;
@@ -1507,8 +1530,8 @@ class FoyerTasksCard extends HTMLElement {
     }
     if (repeat === 'mois') {
       const now = new Date();
-      let y = now.getUTCFullYear(), m = now.getUTCMonth() + 1;
-      if (now.getUTCDate() > monthDay) { m++; if (m > 12) { m = 1; y++; } }
+      let y = now.getFullYear(), m = now.getMonth() + 1;
+      if (now.getDate() > monthDay) { m++; if (m > 12) { m = 1; y++; } }
       const maxD = new Date(Date.UTC(y, m, 0)).getUTCDate();
       return `${y}-${String(m).padStart(2,'0')}-${String(Math.min(monthDay, maxD)).padStart(2,'0')}T${time}`;
     }
@@ -1780,12 +1803,12 @@ class FoyerProgressCard extends HTMLElement {
 
     const tasks    = state.attributes.tasks   ?? [];
     const history  = state.attributes.history ?? [];
-    const today    = new Date().toISOString().slice(0, 10);
+    const today    = foyerToday();
     const appWd    = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
     const ruleOk   = t => !t.recurring || !t.weekDays?.length || t.repeat !== 'semaine' || t.weekDays.includes(appWd(t.due?.slice(0, 10) ?? today));
     // doneToday: all completions today (covers both recurring and non-recurring)
     const active    = tasks.filter(t => !t.done);
-    const doneToday = history.filter(h => h.at?.slice(0, 10) === today);
+    const doneToday = history.filter(h => foyerLocalDateOf(h.at) === today);
     const late      = active.filter(t => ruleOk(t) && (t.late || t.due?.slice(0, 10) < today)).length;
     const todayPend = active.filter(t => ruleOk(t) && !t.late && t.due?.slice(0, 10) === today).length;
     const total     = late + todayPend + doneToday.length;
@@ -1820,8 +1843,8 @@ class FoyerProgressCard extends HTMLElement {
       `;
     }).join('');
 
-    const weekStart = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
-    const weekCount = history.filter(h => h.at?.slice(0, 10) >= weekStart).length;
+    const weekStart = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+    const weekCount = history.filter(h => foyerLocalDateOf(h.at) >= weekStart).length;
 
     this.shadowRoot.innerHTML = `
       <style>
