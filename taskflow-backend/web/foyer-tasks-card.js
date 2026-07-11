@@ -1773,9 +1773,30 @@ class FoyerProgressCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass   = null;
-    this._config = null;
-    this._seq    = null;
+    this._hass     = null;
+    this._config   = null;
+    this._seq      = null;
+    this._today    = null;
+    this._dayTimer = null;
+  }
+
+  connectedCallback() {
+    // HA/Lovelace can detach and reattach this element (view switches, dashboard
+    // relayout) without recreating it, which would otherwise leave the day-change
+    // poller dead forever since disconnectedCallback tears it down below.
+    this._startDayTimer();
+  }
+
+  disconnectedCallback() {
+    if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
+  }
+
+  _startDayTimer() {
+    if (this._dayTimer || !this._hass) return;
+    this._dayTimer = setInterval(() => {
+      const d = foyerToday();
+      if (d !== this._today) { this._today = d; this._render(); }
+    }, 60000);
   }
 
   setConfig(config) {
@@ -1788,6 +1809,7 @@ class FoyerProgressCard extends HTMLElement {
     const seq = hass.states[this._config?.foyer_sensor]?.state;
     this._hass = hass;
     if (seq !== this._seq) { this._seq = seq; this._render(); }
+    this._startDayTimer();
   }
 
   _render() {
@@ -1804,6 +1826,7 @@ class FoyerProgressCard extends HTMLElement {
     const tasks    = state.attributes.tasks   ?? [];
     const history  = state.attributes.history ?? [];
     const today    = foyerToday();
+    this._today    = today;
     const appWd    = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
     const ruleOk   = t => !t.recurring || !t.weekDays?.length || t.repeat !== 'semaine' || t.weekDays.includes(appWd(t.due?.slice(0, 10) ?? today));
     // doneToday: all completions today (covers both recurring and non-recurring)
