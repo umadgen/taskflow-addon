@@ -42,6 +42,7 @@ type Task struct {
 	Time      *string         `json:"time,omitempty"`
 	FreqText  *string         `json:"freqText,omitempty"`
 	Checklist []ChecklistItem `json:"checklist,omitempty"`
+	Critical  bool            `json:"critical,omitempty"`
 }
 
 type HistoryEntry struct {
@@ -51,7 +52,14 @@ type HistoryEntry struct {
 	By     string `json:"by"`
 	At     string `json:"at"`
 	TaskID string `json:"taskId,omitempty"`
+	Action string `json:"action,omitempty"`
 }
+
+const (
+	HistActionCompleted = "completed"
+	HistActionPostponed = "postponed"
+	HistActionSkipped   = "skipped"
+)
 
 type Vaccine struct {
 	ID    string `json:"id"`

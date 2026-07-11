@@ -111,6 +111,7 @@ func (h *Handler) completeTask(w http.ResponseWriter, r *http.Request) {
 		By:     body.MemberID,
 		At:     at,
 		TaskID: task.ID,
+		Action: model.HistActionCompleted,
 	}
 	if err := h.db.InsertHistory(entry); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

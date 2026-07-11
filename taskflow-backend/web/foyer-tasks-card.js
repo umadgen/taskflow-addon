@@ -67,13 +67,15 @@ class FoyerTasksCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass        = null;
-    this._config      = null;
-    this._pendingTask = null;
-    this._seq         = null;
-    this._rendered    = false;
-    this._today       = null;
-    this._dayTimer    = null;
+    this._hass          = null;
+    this._config        = null;
+    this._pendingTask   = null;
+    this._pendingAction = null;
+    this._seq           = null;
+    this._rendered      = false;
+    this._today         = null;
+    this._dayTimer      = null;
+    this._criticalTimer = null;
   }
 
   connectedCallback() {
@@ -81,10 +83,12 @@ class FoyerTasksCard extends HTMLElement {
     // relayout) without recreating it, which would otherwise leave the day-change
     // poller dead forever since disconnectedCallback tears it down below.
     this._startDayTimer();
+    this._startCriticalTimer();
   }
 
   disconnectedCallback() {
     if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
+    if (this._criticalTimer) { clearInterval(this._criticalTimer); this._criticalTimer = null; }
   }
 
   _startDayTimer() {
@@ -93,6 +97,26 @@ class FoyerTasksCard extends HTMLElement {
       const d = foyerToday();
       if (d !== this._today) { this._today = d; this._renderTasks(); }
     }, 60000);
+  }
+
+  // Critical tasks need to flip into "alert" state the instant their due
+  // time is reached, which is finer-grained than the daily late bucketing —
+  // so poll independently and just toggle a class on the already-rendered
+  // rows rather than forcing a full re-render.
+  _startCriticalTimer() {
+    if (this._criticalTimer || !this._rendered) return;
+    this._updateCriticalAlerts();
+    this._criticalTimer = setInterval(() => this._updateCriticalAlerts(), 20000);
+  }
+
+  _updateCriticalAlerts() {
+    const tasks = this._getData()?.tasks ?? [];
+    const now = Date.now();
+    this.shadowRoot.querySelectorAll('.task-row[data-critical]').forEach(row => {
+      const task = tasks.find(t => t.id === row.dataset.task);
+      const due  = task ? new Date(task.due).getTime() : NaN;
+      row.classList.toggle('critical-alert', !!task && !task.done && due <= now);
+    });
   }
 
   setConfig(config) {
@@ -212,6 +236,7 @@ class FoyerTasksCard extends HTMLElement {
 
         /* ── Task row ── */
         .task-row {
+          position: relative;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -230,6 +255,36 @@ class FoyerTasksCard extends HTMLElement {
         .task-row:last-child { border-bottom: none; }
         .task-row:active { background: var(--secondary-background-color, rgba(0,0,0,.03)); }
         .task-row.done { opacity: .4; pointer-events: none; }
+
+        /* ── Critical task alert (due time reached/passed) ── */
+        .critical-dot { position: absolute; top: 6px; right: 10px; width: 10px; height: 10px; display: none; }
+        .task-row.critical-alert .critical-dot { display: block; }
+        .critical-dot::before, .critical-dot::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: var(--error-color, #f44336);
+        }
+        .critical-dot::after {
+          animation: criticalPing 1.6s cubic-bezier(0,0,.2,1) infinite;
+        }
+        @keyframes criticalPing {
+          0%           { transform: scale(1);   opacity: .7; }
+          75%, 100%    { transform: scale(2.4);  opacity: 0;  }
+        }
+        .task-row.critical-alert {
+          border-radius: 10px;
+          animation: fadeSlide .15s ease both, criticalGlow 1.6s ease-in-out infinite;
+        }
+        @keyframes criticalGlow {
+          0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+          50%      { box-shadow: 0 0 14px 6px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .critical-dot::after { animation: none; opacity: .7; }
+          .task-row.critical-alert { animation: fadeSlide .15s ease both; box-shadow: 0 0 0 3px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+        }
 
         /* ── Upcoming compact rows ── */
         .upcoming-list { padding: 0 16px 6px 12px; }
@@ -555,6 +610,11 @@ class FoyerTasksCard extends HTMLElement {
           background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, transparent);
           color: var(--primary-text-color);
           font-weight: 600;
+        }
+        .chip.critical-chip.active {
+          border-color: var(--error-color, #f44336);
+          background: color-mix(in srgb, var(--error-color, #f44336) 14%, transparent);
+          color: var(--primary-text-color);
         }
         .wd-row { display: flex; gap: 5px; margin-bottom: 20px; }
         .wd-btn {
@@ -906,6 +966,10 @@ class FoyerTasksCard extends HTMLElement {
           <span class="create-field-label">Heure</span>
           <input class="create-time-input" type="time" value="18:00" />
 
+          <div class="chip-row">
+            <button class="chip critical-chip" data-critical="1"><span class="ctx-icon">⚠️</span>Tâche critique</button>
+          </div>
+
           <span class="create-field-label">Assigné à</span>
           <div class="assignee-chips"></div>
 
@@ -921,6 +985,7 @@ class FoyerTasksCard extends HTMLElement {
         <div class="ctx-modal">
           <div class="modal-drag"></div>
           <div class="ctx-task-name"></div>
+          <button class="ctx-btn ctx-postpone"><span class="ctx-icon">⏩</span>Décaler à demain</button>
           <button class="ctx-btn ctx-skip"><span class="ctx-icon">⏭</span>Ignorer cette occurrence</button>
           <button class="ctx-btn ctx-edit"><span class="ctx-icon">✏️</span>Modifier la tâche</button>
           <div class="ctx-divider"></div>
@@ -989,12 +1054,14 @@ class FoyerTasksCard extends HTMLElement {
       co.querySelector('.date-row').classList.toggle('hidden-field', r !== 'once');
     }));
     co.querySelectorAll('.wd-btn').forEach(b => b.addEventListener('click', () => b.classList.toggle('active')));
+    co.querySelector('.critical-chip').addEventListener('click', () => co.querySelector('.critical-chip').classList.toggle('active'));
     this.shadowRoot.querySelector('.create-submit').addEventListener('click', () => this._submitCreateTask());
 
     // Context menu
     const cx = this.shadowRoot.querySelector('.ctx-overlay');
     cx.addEventListener('click', e => { if (e.target === cx) this._closeCtx(); });
     this.shadowRoot.querySelector('.ctx-cancel').addEventListener('click', () => this._closeCtx());
+    this.shadowRoot.querySelector('.ctx-postpone').addEventListener('click', () => this._ctxPostpone());
     this.shadowRoot.querySelector('.ctx-skip').addEventListener('click', () => this._ctxSkip());
     this.shadowRoot.querySelector('.ctx-edit').addEventListener('click', () => this._ctxEdit());
     this.shadowRoot.querySelector('.ctx-delete').addEventListener('click', () => this._ctxDelete());
@@ -1032,6 +1099,7 @@ class FoyerTasksCard extends HTMLElement {
     // open across midnight with no activity would keep showing yesterday's
     // "today/late" bucketing. Poll for the date rollover and force a re-render.
     this._startDayTimer();
+    this._startCriticalTimer();
   }
 
   // ── Task list render ───────────────────────────────────────────────────────
@@ -1174,6 +1242,7 @@ class FoyerTasksCard extends HTMLElement {
     const urgentTotal = late.length + todayT.length + todayHistDone.length;
     const urgentDone  = todayHistDone.length;
     this._setHeader(urgentDone, urgentTotal, late.length);
+    this._updateCriticalAlerts();
   }
 
   _setHeader(done, total, lateCount) {
@@ -1232,9 +1301,11 @@ class FoyerTasksCard extends HTMLElement {
       : '';
 
     const rowClass = isDone ? ' done' : isUpcoming ? ' upcoming' : '';
+    const criticalAttr = (task.critical && !isDone) ? ' data-critical="1"' : '';
     const inner = `
-      <div class="task-row${rowClass}" data-task="${this._esc(task.id)}">
+      <div class="task-row${rowClass}" data-task="${this._esc(task.id)}"${criticalAttr}>
         <div class="cat-bar" style="background:${catColor}"></div>
+        ${task.critical && !isDone ? '<span class="critical-dot"></span>' : ''}
         <span class="task-icon">${icon}</span>
         <div class="task-body">
           <span class="${isDone ? 'task-name striked' : 'task-name'}">${this._esc(task.title)}${lateBadge}${clBadge ? ' ' + clBadge : ''}</span>
@@ -1279,6 +1350,7 @@ class FoyerTasksCard extends HTMLElement {
     co.querySelector('.create-date-input').value = task?.due?.slice(0, 10) || foyerToday();
     co.querySelector('.create-time-input').value = task?.time ?? '18:00';
     co.querySelector('.create-note-input').value  = task?.note ?? '';
+    co.querySelector('.critical-chip').classList.toggle('active', !!task?.critical);
     // Populate assignee chips dynamically
     const members = this._getData()?.members ?? [];
     const curAssignee = task?.assignee ?? null;
@@ -1319,18 +1391,45 @@ class FoyerTasksCard extends HTMLElement {
     this._ctxTask = null;
   }
 
-  async _ctxSkip() {
+  _ctxPostpone() {
     const task = this._ctxTask;
     this._closeCtx();
     if (!task) return;
+    const members = this._getData()?.members ?? [];
+    this._openModal(task, members, 'postpone');
+  }
+
+  _ctxSkip() {
+    const task = this._ctxTask;
+    this._closeCtx();
+    if (!task) return;
+    const members = this._getData()?.members ?? [];
+    this._openModal(task, members, 'skip');
+  }
+
+  async _confirmPostpone(memberId) {
+    if (!this._pendingTask || !this._hass) return;
+    const task = this._pendingTask;
+    this._closeModal();
+    const tomorrow = this._addDaysISO(foyerToday(), 1);
+    const time = task.time || task.due.slice(11, 16) || '18:00';
+    await this._callApi({
+      type: 'postponeTask', id: task.id, memberId,
+      at: new Date().toISOString(), histId: this._newId(),
+      patch: { due: `${tomorrow}T${time}`, late: false },
+    });
+  }
+
+  async _confirmSkip(memberId) {
+    if (!this._pendingTask || !this._hass) return;
+    const task = this._pendingTask;
+    this._closeModal();
     const after = task.due.slice(0, 10);
     const next  = this._nextOccurrenceAfter(task, after);
     const time  = task.time || task.due.slice(11, 16) || '18:00';
-    if (next) {
-      await this._callApi({ type: 'editTask', id: task.id, patch: { due: `${next}T${time}`, late: false } });
-    } else {
-      await this._callApi({ type: 'deleteTask', id: task.id });
-    }
+    const op = { type: 'skipTask', id: task.id, memberId, at: new Date().toISOString(), histId: this._newId() };
+    if (next) op.patch = { due: `${next}T${time}`, late: false };
+    await this._callApi(op);
   }
 
   _ctxEdit() {
@@ -1485,7 +1584,8 @@ class FoyerTasksCard extends HTMLElement {
     const assigneeVal = co.querySelector('.assignee-chip.active')?.dataset.assignee;
     const assignee    = (!assigneeVal || assigneeVal === '__none__') ? null : assigneeVal;
     const note        = co.querySelector('.create-note-input').value.trim() || null;
-    const patch = { title, cat, repeat, recurring: repeat !== 'once', weekDays, monthDay, time, freqText, due, late: false, assignee, note };
+    const critical    = co.querySelector('.critical-chip').classList.contains('active');
+    const patch = { title, cat, repeat, recurring: repeat !== 'once', weekDays, monthDay, time, freqText, due, late: false, assignee, note, critical };
     const op = this._editingTask
       ? { type: 'editTask', id: this._editingTask.id, patch }
       : { type: 'addTask', id: this._newId(), task: { ...patch, done: false, doneBy: null, doneAt: null } };
@@ -1551,8 +1651,18 @@ class FoyerTasksCard extends HTMLElement {
   }
 
   // ── Modal ──────────────────────────────────────────────────────────────────
-  _openModal(task, members) {
-    this._pendingTask = task;
+  static get _MODAL_EYEBROW() {
+    return {
+      complete: 'Qui a fait ça ?',
+      postpone: 'Qui décale la tâche ?',
+      skip:     'Qui ignore cette tâche ?',
+    };
+  }
+
+  _openModal(task, members, action = 'complete') {
+    this._pendingTask   = task;
+    this._pendingAction = action;
+    this.shadowRoot.querySelector('.modal-eyebrow').textContent = FoyerTasksCard._MODAL_EYEBROW[action] ?? FoyerTasksCard._MODAL_EYEBROW.complete;
     this.shadowRoot.querySelector('.modal-task-name').textContent = task.title;
 
     const peopleRow = this.shadowRoot.querySelector('.people-row');
@@ -1567,7 +1677,10 @@ class FoyerTasksCard extends HTMLElement {
     peopleRow.querySelectorAll('.person-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        this._confirmComplete(btn.dataset.memberId);
+        const memberId = btn.dataset.memberId;
+        if (this._pendingAction === 'postpone') this._confirmPostpone(memberId);
+        else if (this._pendingAction === 'skip') this._confirmSkip(memberId);
+        else this._confirmComplete(memberId);
       });
     });
 
@@ -1576,7 +1689,8 @@ class FoyerTasksCard extends HTMLElement {
 
   _closeModal() {
     this.shadowRoot.querySelector('.modal-overlay')?.classList.remove('open');
-    this._pendingTask = null;
+    this._pendingTask   = null;
+    this._pendingAction = null;
   }
 
   _confirmComplete(memberId) {
@@ -1750,12 +1864,18 @@ class FoyerHistoryCard extends HTMLElement {
       const avatar   = member
         ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:${tone};color:#fff;font-size:8px;font-weight:700;flex-shrink:0">${foyerEsc(member.initial)}</span>`
         : '';
+      const actionMeta = {
+        postponed: { icon: '⏩', verb: 'a reporté' },
+        skipped:   { icon: '⏭', verb: 'a ignoré' },
+      }[entry.action];
+      const rowIcon = actionMeta?.icon ?? catIcon;
+      const verb    = actionMeta?.verb ?? null;
       return `
         <div class="hist-row">
           <div class="hist-dot" style="background:${catColor}"></div>
-          <span class="hist-icon">${catIcon}</span>
+          <span class="hist-icon">${rowIcon}</span>
           <span class="hist-name">${foyerEsc(entry.title)}</span>
-          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${avatar}${foyerEsc(member?.name ?? '?')} · ${foyerFormatAt(entry.at)}</span>
+          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${avatar}${foyerEsc(member?.name ?? '?')}${verb ? ` ${verb}` : ''} · ${foyerFormatAt(entry.at)}</span>
         </div>
       `;
     }).join('');
@@ -1773,9 +1893,30 @@ class FoyerProgressCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass   = null;
-    this._config = null;
-    this._seq    = null;
+    this._hass     = null;
+    this._config   = null;
+    this._seq      = null;
+    this._today    = null;
+    this._dayTimer = null;
+  }
+
+  connectedCallback() {
+    // HA/Lovelace can detach and reattach this element (view switches, dashboard
+    // relayout) without recreating it, which would otherwise leave the day-change
+    // poller dead forever since disconnectedCallback tears it down below.
+    this._startDayTimer();
+  }
+
+  disconnectedCallback() {
+    if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
+  }
+
+  _startDayTimer() {
+    if (this._dayTimer || !this._hass) return;
+    this._dayTimer = setInterval(() => {
+      const d = foyerToday();
+      if (d !== this._today) { this._today = d; this._render(); }
+    }, 60000);
   }
 
   setConfig(config) {
@@ -1788,6 +1929,7 @@ class FoyerProgressCard extends HTMLElement {
     const seq = hass.states[this._config?.foyer_sensor]?.state;
     this._hass = hass;
     if (seq !== this._seq) { this._seq = seq; this._render(); }
+    this._startDayTimer();
   }
 
   _render() {
@@ -1804,6 +1946,7 @@ class FoyerProgressCard extends HTMLElement {
     const tasks    = state.attributes.tasks   ?? [];
     const history  = state.attributes.history ?? [];
     const today    = foyerToday();
+    this._today    = today;
     const appWd    = iso => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
     const ruleOk   = t => !t.recurring || !t.weekDays?.length || t.repeat !== 'semaine' || t.weekDays.includes(appWd(t.due?.slice(0, 10) ?? today));
     // doneToday: all completions today (covers both recurring and non-recurring)
