@@ -42,6 +42,7 @@ type Task struct {
 	Time      *string         `json:"time,omitempty"`
 	FreqText  *string         `json:"freqText,omitempty"`
 	Checklist []ChecklistItem `json:"checklist,omitempty"`
+	Critical  bool            `json:"critical,omitempty"`
 }
 
 type HistoryEntry struct {

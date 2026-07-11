@@ -75,6 +75,7 @@ class FoyerTasksCard extends HTMLElement {
     this._rendered      = false;
     this._today         = null;
     this._dayTimer      = null;
+    this._criticalTimer = null;
   }
 
   connectedCallback() {
@@ -82,10 +83,12 @@ class FoyerTasksCard extends HTMLElement {
     // relayout) without recreating it, which would otherwise leave the day-change
     // poller dead forever since disconnectedCallback tears it down below.
     this._startDayTimer();
+    this._startCriticalTimer();
   }
 
   disconnectedCallback() {
     if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
+    if (this._criticalTimer) { clearInterval(this._criticalTimer); this._criticalTimer = null; }
   }
 
   _startDayTimer() {
@@ -94,6 +97,26 @@ class FoyerTasksCard extends HTMLElement {
       const d = foyerToday();
       if (d !== this._today) { this._today = d; this._renderTasks(); }
     }, 60000);
+  }
+
+  // Critical tasks need to flip into "alert" state the instant their due
+  // time is reached, which is finer-grained than the daily late bucketing —
+  // so poll independently and just toggle a class on the already-rendered
+  // rows rather than forcing a full re-render.
+  _startCriticalTimer() {
+    if (this._criticalTimer || !this._rendered) return;
+    this._updateCriticalAlerts();
+    this._criticalTimer = setInterval(() => this._updateCriticalAlerts(), 20000);
+  }
+
+  _updateCriticalAlerts() {
+    const tasks = this._getData()?.tasks ?? [];
+    const now = Date.now();
+    this.shadowRoot.querySelectorAll('.task-row[data-critical]').forEach(row => {
+      const task = tasks.find(t => t.id === row.dataset.task);
+      const due  = task ? new Date(task.due).getTime() : NaN;
+      row.classList.toggle('critical-alert', !!task && !task.done && due <= now);
+    });
   }
 
   setConfig(config) {
@@ -213,6 +236,7 @@ class FoyerTasksCard extends HTMLElement {
 
         /* ── Task row ── */
         .task-row {
+          position: relative;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -231,6 +255,36 @@ class FoyerTasksCard extends HTMLElement {
         .task-row:last-child { border-bottom: none; }
         .task-row:active { background: var(--secondary-background-color, rgba(0,0,0,.03)); }
         .task-row.done { opacity: .4; pointer-events: none; }
+
+        /* ── Critical task alert (due time reached/passed) ── */
+        .critical-dot { position: absolute; top: 6px; right: 10px; width: 10px; height: 10px; display: none; }
+        .task-row.critical-alert .critical-dot { display: block; }
+        .critical-dot::before, .critical-dot::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: var(--error-color, #f44336);
+        }
+        .critical-dot::after {
+          animation: criticalPing 1.6s cubic-bezier(0,0,.2,1) infinite;
+        }
+        @keyframes criticalPing {
+          0%           { transform: scale(1);   opacity: .7; }
+          75%, 100%    { transform: scale(2.4);  opacity: 0;  }
+        }
+        .task-row.critical-alert {
+          border-radius: 10px;
+          animation: fadeSlide .15s ease both, criticalGlow 1.6s ease-in-out infinite;
+        }
+        @keyframes criticalGlow {
+          0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+          50%      { box-shadow: 0 0 14px 6px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .critical-dot::after { animation: none; opacity: .7; }
+          .task-row.critical-alert { animation: fadeSlide .15s ease both; box-shadow: 0 0 0 3px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+        }
 
         /* ── Upcoming compact rows ── */
         .upcoming-list { padding: 0 16px 6px 12px; }
@@ -556,6 +610,11 @@ class FoyerTasksCard extends HTMLElement {
           background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, transparent);
           color: var(--primary-text-color);
           font-weight: 600;
+        }
+        .chip.critical-chip.active {
+          border-color: var(--error-color, #f44336);
+          background: color-mix(in srgb, var(--error-color, #f44336) 14%, transparent);
+          color: var(--primary-text-color);
         }
         .wd-row { display: flex; gap: 5px; margin-bottom: 20px; }
         .wd-btn {
@@ -907,6 +966,10 @@ class FoyerTasksCard extends HTMLElement {
           <span class="create-field-label">Heure</span>
           <input class="create-time-input" type="time" value="18:00" />
 
+          <div class="chip-row">
+            <button class="chip critical-chip" data-critical="1"><span class="ctx-icon">⚠️</span>Tâche critique</button>
+          </div>
+
           <span class="create-field-label">Assigné à</span>
           <div class="assignee-chips"></div>
 
@@ -991,6 +1054,7 @@ class FoyerTasksCard extends HTMLElement {
       co.querySelector('.date-row').classList.toggle('hidden-field', r !== 'once');
     }));
     co.querySelectorAll('.wd-btn').forEach(b => b.addEventListener('click', () => b.classList.toggle('active')));
+    co.querySelector('.critical-chip').addEventListener('click', () => co.querySelector('.critical-chip').classList.toggle('active'));
     this.shadowRoot.querySelector('.create-submit').addEventListener('click', () => this._submitCreateTask());
 
     // Context menu
@@ -1035,6 +1099,7 @@ class FoyerTasksCard extends HTMLElement {
     // open across midnight with no activity would keep showing yesterday's
     // "today/late" bucketing. Poll for the date rollover and force a re-render.
     this._startDayTimer();
+    this._startCriticalTimer();
   }
 
   // ── Task list render ───────────────────────────────────────────────────────
@@ -1177,6 +1242,7 @@ class FoyerTasksCard extends HTMLElement {
     const urgentTotal = late.length + todayT.length + todayHistDone.length;
     const urgentDone  = todayHistDone.length;
     this._setHeader(urgentDone, urgentTotal, late.length);
+    this._updateCriticalAlerts();
   }
 
   _setHeader(done, total, lateCount) {
@@ -1235,9 +1301,11 @@ class FoyerTasksCard extends HTMLElement {
       : '';
 
     const rowClass = isDone ? ' done' : isUpcoming ? ' upcoming' : '';
+    const criticalAttr = (task.critical && !isDone) ? ' data-critical="1"' : '';
     const inner = `
-      <div class="task-row${rowClass}" data-task="${this._esc(task.id)}">
+      <div class="task-row${rowClass}" data-task="${this._esc(task.id)}"${criticalAttr}>
         <div class="cat-bar" style="background:${catColor}"></div>
+        ${task.critical && !isDone ? '<span class="critical-dot"></span>' : ''}
         <span class="task-icon">${icon}</span>
         <div class="task-body">
           <span class="${isDone ? 'task-name striked' : 'task-name'}">${this._esc(task.title)}${lateBadge}${clBadge ? ' ' + clBadge : ''}</span>
@@ -1282,6 +1350,7 @@ class FoyerTasksCard extends HTMLElement {
     co.querySelector('.create-date-input').value = task?.due?.slice(0, 10) || foyerToday();
     co.querySelector('.create-time-input').value = task?.time ?? '18:00';
     co.querySelector('.create-note-input').value  = task?.note ?? '';
+    co.querySelector('.critical-chip').classList.toggle('active', !!task?.critical);
     // Populate assignee chips dynamically
     const members = this._getData()?.members ?? [];
     const curAssignee = task?.assignee ?? null;
@@ -1515,7 +1584,8 @@ class FoyerTasksCard extends HTMLElement {
     const assigneeVal = co.querySelector('.assignee-chip.active')?.dataset.assignee;
     const assignee    = (!assigneeVal || assigneeVal === '__none__') ? null : assigneeVal;
     const note        = co.querySelector('.create-note-input').value.trim() || null;
-    const patch = { title, cat, repeat, recurring: repeat !== 'once', weekDays, monthDay, time, freqText, due, late: false, assignee, note };
+    const critical    = co.querySelector('.critical-chip').classList.contains('active');
+    const patch = { title, cat, repeat, recurring: repeat !== 'once', weekDays, monthDay, time, freqText, due, late: false, assignee, note, critical };
     const op = this._editingTask
       ? { type: 'editTask', id: this._editingTask.id, patch }
       : { type: 'addTask', id: this._newId(), task: { ...patch, done: false, doneBy: null, doneAt: null } };

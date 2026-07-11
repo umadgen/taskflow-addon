@@ -84,6 +84,7 @@ func (d *DB) migrate() error {
 	d.sql.Exec(`ALTER TABLE members ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
 	d.sql.Exec(`ALTER TABLE tasks ADD COLUMN checklist TEXT NOT NULL DEFAULT '[]'`)
 	d.sql.Exec(`ALTER TABLE history ADD COLUMN action TEXT NOT NULL DEFAULT 'completed'`)
+	d.sql.Exec(`ALTER TABLE tasks ADD COLUMN critical INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 
@@ -140,7 +141,7 @@ func (d *DB) DeleteMember(id string) error {
 func (d *DB) GetTasks() ([]model.Task, error) {
 	rows, err := d.sql.Query(`
 		SELECT id, title, cat, assignee, done, done_by, done_at,
-		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist
+		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist, critical
 		FROM tasks ORDER BY due`)
 	if err != nil {
 		return nil, err
@@ -163,7 +164,7 @@ func (d *DB) GetTasks() ([]model.Task, error) {
 func (d *DB) GetTask(id string) (*model.Task, error) {
 	rows, err := d.sql.Query(`
 		SELECT id, title, cat, assignee, done, done_by, done_at,
-		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist
+		       due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist, critical
 		FROM tasks WHERE id = ?`, id)
 	if err != nil {
 		return nil, err
@@ -181,14 +182,14 @@ func (d *DB) GetTask(id string) (*model.Task, error) {
 
 func scanTask(rows *sql.Rows) (model.Task, error) {
 	var t model.Task
-	var done, late, recurring int
+	var done, late, recurring, critical int
 	var weekDaysJSON, checklistJSON sql.NullString
 	err := rows.Scan(
 		&t.ID, &t.Title, &t.Cat,
 		&t.Assignee, &done, &t.DoneBy, &t.DoneAt,
 		&t.Due, &late, &recurring,
 		&t.Repeat, &weekDaysJSON, &t.MonthDay, &t.Time, &t.FreqText,
-		&checklistJSON,
+		&checklistJSON, &critical,
 	)
 	if err != nil {
 		return t, err
@@ -196,6 +197,7 @@ func scanTask(rows *sql.Rows) (model.Task, error) {
 	t.Done = done != 0
 	t.Late = late != 0
 	t.Recurring = recurring != 0
+	t.Critical = critical != 0
 	if weekDaysJSON.Valid && weekDaysJSON.String != "" && weekDaysJSON.String != "null" {
 		_ = json.Unmarshal([]byte(weekDaysJSON.String), &t.WeekDays)
 	}
@@ -216,18 +218,18 @@ func (d *DB) UpsertTask(t model.Task) error {
 	clJSON, _ := json.Marshal(t.Checklist)
 	_, err := d.sql.Exec(`
 		INSERT INTO tasks
-		  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text, checklist, critical)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		  title=excluded.title, cat=excluded.cat, assignee=excluded.assignee,
 		  done=excluded.done, done_by=excluded.done_by, done_at=excluded.done_at,
 		  due=excluded.due, late=excluded.late, recurring=excluded.recurring,
 		  repeat=excluded.repeat, week_days=excluded.week_days, month_day=excluded.month_day,
-		  time=excluded.time, freq_text=excluded.freq_text, checklist=excluded.checklist`,
+		  time=excluded.time, freq_text=excluded.freq_text, checklist=excluded.checklist, critical=excluded.critical`,
 		t.ID, t.Title, t.Cat,
 		t.Assignee, boolInt(t.Done), t.DoneBy, t.DoneAt,
 		t.Due, boolInt(t.Late), boolInt(t.Recurring),
-		t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText, string(clJSON),
+		t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText, string(clJSON), boolInt(t.Critical),
 	)
 	return err
 }
@@ -421,12 +423,12 @@ func (d *DB) ImportData(data model.AppData) error {
 		wdJSON, _ := json.Marshal(t.WeekDays)
 		if _, err := tx.Exec(`
 			INSERT OR REPLACE INTO tasks
-			  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			  (id, title, cat, assignee, done, done_by, done_at, due, late, recurring, repeat, week_days, month_day, time, freq_text, critical)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			t.ID, t.Title, t.Cat,
 			t.Assignee, boolInt(t.Done), t.DoneBy, t.DoneAt,
 			t.Due, boolInt(t.Late), boolInt(t.Recurring),
-			t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText,
+			t.Repeat, string(wdJSON), t.MonthDay, t.Time, t.FreqText, boolInt(t.Critical),
 		); err != nil {
 			return fmt.Errorf("task %s: %w", t.ID, err)
 		}
