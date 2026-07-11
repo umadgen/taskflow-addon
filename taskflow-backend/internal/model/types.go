@@ -51,7 +51,14 @@ type HistoryEntry struct {
 	By     string `json:"by"`
 	At     string `json:"at"`
 	TaskID string `json:"taskId,omitempty"`
+	Action string `json:"action,omitempty"`
 }
+
+const (
+	HistActionCompleted = "completed"
+	HistActionPostponed = "postponed"
+	HistActionSkipped   = "skipped"
+)
 
 type Vaccine struct {
 	ID    string `json:"id"`

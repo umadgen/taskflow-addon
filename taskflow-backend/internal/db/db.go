@@ -59,7 +59,8 @@ func (d *DB) migrate() error {
 			cat     TEXT NOT NULL,
 			by      TEXT NOT NULL,
 			at      TEXT NOT NULL,
-			task_id TEXT
+			task_id TEXT,
+			action  TEXT NOT NULL DEFAULT 'completed'
 		);
 		CREATE TABLE IF NOT EXISTS pets (
 			id   TEXT PRIMARY KEY,
@@ -82,6 +83,7 @@ func (d *DB) migrate() error {
 	// Migrations for existing DBs (errors ignored when column already present)
 	d.sql.Exec(`ALTER TABLE members ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
 	d.sql.Exec(`ALTER TABLE tasks ADD COLUMN checklist TEXT NOT NULL DEFAULT '[]'`)
+	d.sql.Exec(`ALTER TABLE history ADD COLUMN action TEXT NOT NULL DEFAULT 'completed'`)
 	return nil
 }
 
@@ -239,7 +241,7 @@ func (d *DB) DeleteTask(id string) error {
 
 func (d *DB) GetHistory() ([]model.HistoryEntry, error) {
 	rows, err := d.sql.Query(
-		`SELECT id, title, cat, by, at, task_id FROM history ORDER BY at DESC LIMIT 200`)
+		`SELECT id, title, cat, by, at, task_id, action FROM history ORDER BY at DESC LIMIT 200`)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +250,7 @@ func (d *DB) GetHistory() ([]model.HistoryEntry, error) {
 	for rows.Next() {
 		var e model.HistoryEntry
 		var taskID sql.NullString
-		if err := rows.Scan(&e.ID, &e.Title, &e.Cat, &e.By, &e.At, &taskID); err != nil {
+		if err := rows.Scan(&e.ID, &e.Title, &e.Cat, &e.By, &e.At, &taskID, &e.Action); err != nil {
 			return nil, err
 		}
 		if taskID.Valid {
@@ -263,9 +265,13 @@ func (d *DB) GetHistory() ([]model.HistoryEntry, error) {
 }
 
 func (d *DB) InsertHistory(e model.HistoryEntry) error {
+	action := e.Action
+	if action == "" {
+		action = model.HistActionCompleted
+	}
 	_, err := d.sql.Exec(
-		`INSERT OR IGNORE INTO history (id, title, cat, by, at, task_id) VALUES (?, ?, ?, ?, ?, ?)`,
-		e.ID, e.Title, e.Cat, e.By, e.At, nullStr(e.TaskID),
+		`INSERT OR IGNORE INTO history (id, title, cat, by, at, task_id, action) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		e.ID, e.Title, e.Cat, e.By, e.At, nullStr(e.TaskID), action,
 	)
 	return err
 }
@@ -426,9 +432,13 @@ func (d *DB) ImportData(data model.AppData) error {
 		}
 	}
 	for _, e := range data.History {
+		action := e.Action
+		if action == "" {
+			action = model.HistActionCompleted
+		}
 		if _, err := tx.Exec(
-			`INSERT OR REPLACE INTO history (id, title, cat, by, at, task_id) VALUES (?, ?, ?, ?, ?, ?)`,
-			e.ID, e.Title, e.Cat, e.By, e.At, nullStr(e.TaskID),
+			`INSERT OR REPLACE INTO history (id, title, cat, by, at, task_id, action) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			e.ID, e.Title, e.Cat, e.By, e.At, nullStr(e.TaskID), action,
 		); err != nil {
 			return fmt.Errorf("history %s: %w", e.ID, err)
 		}

@@ -67,13 +67,14 @@ class FoyerTasksCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this._hass        = null;
-    this._config      = null;
-    this._pendingTask = null;
-    this._seq         = null;
-    this._rendered    = false;
-    this._today       = null;
-    this._dayTimer    = null;
+    this._hass          = null;
+    this._config        = null;
+    this._pendingTask   = null;
+    this._pendingAction = null;
+    this._seq           = null;
+    this._rendered      = false;
+    this._today         = null;
+    this._dayTimer      = null;
   }
 
   connectedCallback() {
@@ -921,6 +922,7 @@ class FoyerTasksCard extends HTMLElement {
         <div class="ctx-modal">
           <div class="modal-drag"></div>
           <div class="ctx-task-name"></div>
+          <button class="ctx-btn ctx-postpone"><span class="ctx-icon">⏩</span>Décaler à demain</button>
           <button class="ctx-btn ctx-skip"><span class="ctx-icon">⏭</span>Ignorer cette occurrence</button>
           <button class="ctx-btn ctx-edit"><span class="ctx-icon">✏️</span>Modifier la tâche</button>
           <div class="ctx-divider"></div>
@@ -995,6 +997,7 @@ class FoyerTasksCard extends HTMLElement {
     const cx = this.shadowRoot.querySelector('.ctx-overlay');
     cx.addEventListener('click', e => { if (e.target === cx) this._closeCtx(); });
     this.shadowRoot.querySelector('.ctx-cancel').addEventListener('click', () => this._closeCtx());
+    this.shadowRoot.querySelector('.ctx-postpone').addEventListener('click', () => this._ctxPostpone());
     this.shadowRoot.querySelector('.ctx-skip').addEventListener('click', () => this._ctxSkip());
     this.shadowRoot.querySelector('.ctx-edit').addEventListener('click', () => this._ctxEdit());
     this.shadowRoot.querySelector('.ctx-delete').addEventListener('click', () => this._ctxDelete());
@@ -1319,18 +1322,45 @@ class FoyerTasksCard extends HTMLElement {
     this._ctxTask = null;
   }
 
-  async _ctxSkip() {
+  _ctxPostpone() {
     const task = this._ctxTask;
     this._closeCtx();
     if (!task) return;
+    const members = this._getData()?.members ?? [];
+    this._openModal(task, members, 'postpone');
+  }
+
+  _ctxSkip() {
+    const task = this._ctxTask;
+    this._closeCtx();
+    if (!task) return;
+    const members = this._getData()?.members ?? [];
+    this._openModal(task, members, 'skip');
+  }
+
+  async _confirmPostpone(memberId) {
+    if (!this._pendingTask || !this._hass) return;
+    const task = this._pendingTask;
+    this._closeModal();
+    const tomorrow = this._addDaysISO(foyerToday(), 1);
+    const time = task.time || task.due.slice(11, 16) || '18:00';
+    await this._callApi({
+      type: 'postponeTask', id: task.id, memberId,
+      at: new Date().toISOString(), histId: this._newId(),
+      patch: { due: `${tomorrow}T${time}`, late: false },
+    });
+  }
+
+  async _confirmSkip(memberId) {
+    if (!this._pendingTask || !this._hass) return;
+    const task = this._pendingTask;
+    this._closeModal();
     const after = task.due.slice(0, 10);
     const next  = this._nextOccurrenceAfter(task, after);
     const time  = task.time || task.due.slice(11, 16) || '18:00';
-    if (next) {
-      await this._callApi({ type: 'editTask', id: task.id, patch: { due: `${next}T${time}`, late: false } });
-    } else {
-      await this._callApi({ type: 'deleteTask', id: task.id });
-    }
+    const op = { type: 'skipTask', id: task.id, memberId, at: new Date().toISOString(), histId: this._newId() };
+    if (next) op.patch = { due: `${next}T${time}`, late: false };
+    await this._callApi(op);
   }
 
   _ctxEdit() {
@@ -1551,8 +1581,18 @@ class FoyerTasksCard extends HTMLElement {
   }
 
   // ── Modal ──────────────────────────────────────────────────────────────────
-  _openModal(task, members) {
-    this._pendingTask = task;
+  static get _MODAL_EYEBROW() {
+    return {
+      complete: 'Qui a fait ça ?',
+      postpone: 'Qui décale la tâche ?',
+      skip:     'Qui ignore cette tâche ?',
+    };
+  }
+
+  _openModal(task, members, action = 'complete') {
+    this._pendingTask   = task;
+    this._pendingAction = action;
+    this.shadowRoot.querySelector('.modal-eyebrow').textContent = FoyerTasksCard._MODAL_EYEBROW[action] ?? FoyerTasksCard._MODAL_EYEBROW.complete;
     this.shadowRoot.querySelector('.modal-task-name').textContent = task.title;
 
     const peopleRow = this.shadowRoot.querySelector('.people-row');
@@ -1567,7 +1607,10 @@ class FoyerTasksCard extends HTMLElement {
     peopleRow.querySelectorAll('.person-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        this._confirmComplete(btn.dataset.memberId);
+        const memberId = btn.dataset.memberId;
+        if (this._pendingAction === 'postpone') this._confirmPostpone(memberId);
+        else if (this._pendingAction === 'skip') this._confirmSkip(memberId);
+        else this._confirmComplete(memberId);
       });
     });
 
@@ -1576,7 +1619,8 @@ class FoyerTasksCard extends HTMLElement {
 
   _closeModal() {
     this.shadowRoot.querySelector('.modal-overlay')?.classList.remove('open');
-    this._pendingTask = null;
+    this._pendingTask   = null;
+    this._pendingAction = null;
   }
 
   _confirmComplete(memberId) {
@@ -1750,12 +1794,18 @@ class FoyerHistoryCard extends HTMLElement {
       const avatar   = member
         ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:${tone};color:#fff;font-size:8px;font-weight:700;flex-shrink:0">${foyerEsc(member.initial)}</span>`
         : '';
+      const actionMeta = {
+        postponed: { icon: '⏩', verb: 'a reporté' },
+        skipped:   { icon: '⏭', verb: 'a ignoré' },
+      }[entry.action];
+      const rowIcon = actionMeta?.icon ?? catIcon;
+      const verb    = actionMeta?.verb ?? null;
       return `
         <div class="hist-row">
           <div class="hist-dot" style="background:${catColor}"></div>
-          <span class="hist-icon">${catIcon}</span>
+          <span class="hist-icon">${rowIcon}</span>
           <span class="hist-name">${foyerEsc(entry.title)}</span>
-          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${avatar}${foyerEsc(member?.name ?? '?')} · ${foyerFormatAt(entry.at)}</span>
+          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${avatar}${foyerEsc(member?.name ?? '?')}${verb ? ` ${verb}` : ''} · ${foyerFormatAt(entry.at)}</span>
         </div>
       `;
     }).join('');

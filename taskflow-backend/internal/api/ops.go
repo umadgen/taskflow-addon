@@ -106,6 +106,7 @@ func (h *Handler) handleOps(w http.ResponseWriter, r *http.Request) {
 			By:     op.MemberID,
 			At:     at,
 			TaskID: task.ID,
+			Action: model.HistActionCompleted,
 		}
 		if err = h.db.InsertHistory(entry); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -132,6 +133,99 @@ func (h *Handler) handleOps(w http.ResponseWriter, r *http.Request) {
 		if err = h.db.UpsertTask(*task); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		seq, _ = h.db.IncrSeq()
+		go h.notify(seq)
+
+	case "postponeTask":
+		task, err2 := h.db.GetTask(op.ID)
+		if err2 != nil {
+			writeError(w, http.StatusInternalServerError, err2.Error())
+			return
+		}
+		if task == nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		at := op.At
+		if at == "" {
+			at = time.Now().UTC().Format(time.RFC3339)
+		}
+		histID := op.HistID
+		if histID == "" {
+			histID = newID()
+		}
+		entry := model.HistoryEntry{
+			ID:     histID,
+			Title:  task.Title,
+			Cat:    task.Cat,
+			By:     op.MemberID,
+			At:     at,
+			TaskID: task.ID,
+			Action: model.HistActionPostponed,
+		}
+		if err = h.db.InsertHistory(entry); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err = json.Unmarshal(op.Patch, task); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		task.ID = op.ID
+		if err = h.db.UpsertTask(*task); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		seq, _ = h.db.IncrSeq()
+		go h.notify(seq)
+
+	case "skipTask":
+		task, err2 := h.db.GetTask(op.ID)
+		if err2 != nil {
+			writeError(w, http.StatusInternalServerError, err2.Error())
+			return
+		}
+		if task == nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		at := op.At
+		if at == "" {
+			at = time.Now().UTC().Format(time.RFC3339)
+		}
+		histID := op.HistID
+		if histID == "" {
+			histID = newID()
+		}
+		entry := model.HistoryEntry{
+			ID:     histID,
+			Title:  task.Title,
+			Cat:    task.Cat,
+			By:     op.MemberID,
+			At:     at,
+			TaskID: task.ID,
+			Action: model.HistActionSkipped,
+		}
+		if err = h.db.InsertHistory(entry); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if len(op.Patch) > 0 {
+			if err = json.Unmarshal(op.Patch, task); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			task.ID = op.ID
+			if err = h.db.UpsertTask(*task); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		} else {
+			if err = h.db.DeleteTask(op.ID); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 		seq, _ = h.db.IncrSeq()
 		go h.notify(seq)
