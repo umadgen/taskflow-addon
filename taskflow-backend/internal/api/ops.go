@@ -130,6 +130,7 @@ func (h *Handler) handleOps(w http.ResponseWriter, r *http.Request) {
 			task.DoneBy = &op.MemberID
 			task.DoneAt = &at
 		}
+		task.Late = false
 		if err = h.db.UpsertTask(*task); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return

@@ -1,6 +1,6 @@
 name: "Taskflow"
 description: "Family household task manager for Home Assistant"
-version: "1.6.15"
+version: "1.6.16"
 slug: "taskflow"
 url: "https://github.com/umadgen/taskflow-addon"
 image: "ghcr.io/umadgen/taskflow-addon/taskflow-{arch}"

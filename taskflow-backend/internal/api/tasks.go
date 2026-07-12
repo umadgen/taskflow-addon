@@ -128,6 +128,7 @@ func (h *Handler) completeTask(w http.ResponseWriter, r *http.Request) {
 		task.DoneBy = &body.MemberID
 		task.DoneAt = &at
 	}
+	task.Late = false
 
 	if err := h.db.UpsertTask(*task); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -163,6 +164,9 @@ func (h *Handler) uncompleteTask(w http.ResponseWriter, r *http.Request) {
 
 // advanceDue calcule la prochaine échéance d'une tâche récurrente.
 // Weekdays Taskflow : 0=Lun…6=Dim. Go Weekday : 0=Dim…6=Sam.
+// Si la tâche était en retard depuis plus d'un cycle, on avance jusqu'à
+// obtenir une échéance qui n'est plus dans le passé, pour éviter qu'elle
+// ne réapparaisse aussitôt comme en retard.
 func advanceDue(t model.Task) string {
 	const layout = "2006-01-02T15:04"
 	due, err := time.Parse(layout, t.Due)
@@ -170,6 +174,19 @@ func advanceDue(t model.Task) string {
 		due, _ = time.Parse(time.RFC3339, t.Due)
 	}
 
+	today := time.Now().Format("2006-01-02")
+	for {
+		due = advanceDueOnce(t, due)
+		if due.Format("2006-01-02") >= today {
+			break
+		}
+	}
+
+	return due.Format(layout)
+}
+
+// advanceDueOnce calcule une seule occurrence suivante à partir de due.
+func advanceDueOnce(t model.Task, due time.Time) time.Time {
 	repeat := ""
 	if t.Repeat != nil {
 		repeat = *t.Repeat
@@ -177,7 +194,7 @@ func advanceDue(t model.Task) string {
 
 	switch repeat {
 	case "jour":
-		due = due.AddDate(0, 0, 1)
+		return due.AddDate(0, 0, 1)
 
 	case "semaine":
 		goWD := int(due.Weekday()) // 0=Sun…6=Sat
@@ -194,7 +211,7 @@ func advanceDue(t model.Task) string {
 		if next == 8 {
 			next = 7
 		}
-		due = due.AddDate(0, 0, next)
+		return due.AddDate(0, 0, next)
 
 	case "mois":
 		md := 1
@@ -207,13 +224,11 @@ func advanceDue(t model.Task) string {
 			m = 1
 			y++
 		}
-		due = time.Date(y, m, md, due.Hour(), due.Minute(), 0, 0, due.Location())
+		return time.Date(y, m, md, due.Hour(), due.Minute(), 0, 0, due.Location())
 
 	default:
-		due = due.AddDate(0, 0, 7)
+		return due.AddDate(0, 0, 7)
 	}
-
-	return due.Format(layout)
 }
 
 // addEvery ajoute une durée décrite en texte ("3 mois", "15 jours", "1 an").
