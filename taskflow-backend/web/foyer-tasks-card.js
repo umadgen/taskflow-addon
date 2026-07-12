@@ -278,12 +278,12 @@ class FoyerTasksCard extends HTMLElement {
           animation: fadeSlide .15s ease both, criticalGlow 1.6s ease-in-out infinite;
         }
         @keyframes criticalGlow {
-          0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
-          50%      { box-shadow: 0 0 14px 6px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+          0%, 100% { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--error-color, #f44336) 25%, transparent); }
+          50%      { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--error-color, #f44336) 70%, transparent); }
         }
         @media (prefers-reduced-motion: reduce) {
           .critical-dot::after { animation: none; opacity: .7; }
-          .task-row.critical-alert { animation: fadeSlide .15s ease both; box-shadow: 0 0 0 3px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
+          .task-row.critical-alert { animation: fadeSlide .15s ease both; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--error-color, #f44336) 45%, transparent); }
         }
 
         /* ── Upcoming compact rows ── */
