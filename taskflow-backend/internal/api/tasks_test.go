@@ -3,6 +3,7 @@ package api_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"foyer/taskflow/internal/model"
 )
@@ -87,6 +88,30 @@ func TestCompleteRecurring(t *testing.T) {
 	}
 	if tasks[0].Due == "2026-06-29T08:00" {
 		t.Fatal("due date should have advanced")
+	}
+}
+
+func TestCompleteVeryOverdueRecurringClearsLate(t *testing.T) {
+	h := newTestHandler(t)
+	// Tâche hebdomadaire en retard depuis des années, marquée "late".
+	doReq(t, h, http.MethodPost, "/api/tasks",
+		`{"id":"t1","title":"Sortir poubelles","cat":"maison","due":"2020-01-06T08:00","recurring":true,"repeat":"semaine","weekDays":[0],"late":true}`)
+	doReq(t, h, http.MethodPost, "/api/members",
+		`{"id":"m1","name":"Alice","initial":"A","tone":"rose"}`)
+
+	doReq(t, h, http.MethodPost, "/api/tasks/t1/complete",
+		`{"memberId":"m1","histId":"h1"}`)
+
+	resp := doReq(t, h, http.MethodGet, "/api/tasks", "")
+	var tasks []model.Task
+	decodeJSON(t, resp, &tasks)
+
+	if tasks[0].Late {
+		t.Fatal("late flag should be cleared after completing the task")
+	}
+	today := time.Now().Format("2006-01-02")
+	if tasks[0].Due[:10] < today {
+		t.Fatalf("next due date %q should not still be in the past (today=%s)", tasks[0].Due, today)
 	}
 }
 
