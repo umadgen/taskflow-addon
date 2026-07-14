@@ -226,6 +226,11 @@ func advanceDueOnce(t model.Task, due time.Time) time.Time {
 		}
 		return time.Date(y, m, md, due.Hour(), due.Minute(), 0, 0, due.Location())
 
+	case model.RepeatWeeklyFree:
+		// Due marque toujours le lundi qui clôt le cycle en cours ; le cycle
+		// suivant se termine donc simplement une semaine plus tard.
+		return due.AddDate(0, 0, 7)
+
 	default:
 		return due.AddDate(0, 0, 7)
 	}

@@ -59,7 +59,13 @@ const (
 	HistActionCompleted = "completed"
 	HistActionPostponed = "postponed"
 	HistActionSkipped   = "skipped"
+	HistActionMissed    = "missed"
 )
+
+// RepeatWeeklyFree identifie une tâche hebdomadaire "libre service" :
+// à faire une fois n'importe quel jour de la semaine (lundi-dimanche),
+// sans jour fixe contrairement au Repeat "semaine" classique.
+const RepeatWeeklyFree = "semaine_libre"
 
 type Vaccine struct {
 	ID    string `json:"id"`
