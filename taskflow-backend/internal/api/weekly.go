@@ -22,28 +22,37 @@ func (h *Handler) RolloverWeeklyTasks() {
 	now := time.Now().Format("2006-01-02T15:04")
 	changed := false
 	for _, t := range tasks {
-		if !t.Recurring || t.Repeat == nil || *t.Repeat != model.RepeatWeeklyFree || t.Done {
+		if !isWeeklyFree(t) {
 			continue
 		}
 		if t.Due > now {
 			continue
 		}
 
-		entry := model.HistoryEntry{
-			ID:     newID(),
-			Title:  t.Title,
-			Cat:    t.Cat,
-			By:     "",
-			At:     t.Due,
-			TaskID: t.ID,
-			Action: model.HistActionMissed,
-		}
-		if err := h.db.InsertHistory(entry); err != nil {
-			log.Printf("weekly-rollover: InsertHistory %s: %v", t.ID, err)
-			continue
+		// Trace une entrée "non faite" uniquement si l'objectif de la semaine
+		// (WeeklyTarget occurrences) n'a pas été atteint. Un cycle pleinement
+		// complété se réinitialise silencieusement.
+		if t.WeeklyCount < weeklyTarget(t) {
+			entry := model.HistoryEntry{
+				ID:     newID(),
+				Title:  t.Title,
+				Cat:    t.Cat,
+				By:     "",
+				At:     t.Due,
+				TaskID: t.ID,
+				Action: model.HistActionMissed,
+			}
+			if err := h.db.InsertHistory(entry); err != nil {
+				log.Printf("weekly-rollover: InsertHistory %s: %v", t.ID, err)
+				continue
+			}
 		}
 
 		t.Due = advanceDue(t)
+		t.WeeklyCount = 0
+		t.Done = false
+		t.DoneBy = nil
+		t.DoneAt = nil
 		t.Late = false
 		if err := h.db.UpsertTask(t); err != nil {
 			log.Printf("weekly-rollover: UpsertTask %s: %v", t.ID, err)

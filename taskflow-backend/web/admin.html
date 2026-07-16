@@ -396,7 +396,11 @@
             <option value="semaine_libre">Tâche hebdomadaire (n'importe quel jour)</option>
           </select>
         </div>
-        <p id="weekly-free-hint" class="hint" style="display:none">À faire une fois, n'importe quel jour de la semaine. Se réinitialise chaque lundi ; si elle n'est pas faite, elle est tracée comme non faite dans l'historique.</p>
+        <div class="fg" id="weekly-target-group" style="display:none">
+          <label>Combien de fois par semaine</label>
+          <input type="number" name="weeklyTarget" id="f-weekly-target" min="1" max="14" value="1">
+        </div>
+        <p id="weekly-free-hint" class="hint" style="display:none">À faire n'importe quel jour de la semaine, dans la limite ci-dessus. Se réinitialise chaque lundi ; si l'objectif n'est pas atteint, c'est tracé comme non fait dans l'historique.</p>
         <div class="fg" id="wd-group" style="display:none">
           <label>Jours</label>
           <div class="wd-grid" id="wd-grid">
@@ -684,7 +688,8 @@ function renderTasks(){
     const cc=CAT_COLORS[t.cat]||'#9e9e9e';
     const isLate=t.due&&t.due.slice(0,10)<today&&!t.done;
     const dueHtml=!t.due?'—':isLate?`<span class="b-late">⚠ ${fdate(t.due)}</span>`:fdate(t.due);
-    const recHtml=t.recurring?`<span class="badge b-rec">↻ ${REP_LBL[t.repeat]||t.repeat||''}</span>`:'—';
+    const weeklyProgress=t.repeat==='semaine_libre'?` ${t.weeklyCount||0}/${t.weeklyTarget||1}`:'';
+    const recHtml=t.recurring?`<span class="badge b-rec">↻ ${REP_LBL[t.repeat]||t.repeat||''}${weeklyProgress}</span>`:'—';
     const mHtml=m?chip(m,24,11):'—';
     const doneIcon=t.done?' <span class="b-done">✓</span>':'';
     const critIcon=t.critical?' <span class="badge b-crit" title="Tâche critique">⚠️ Critique</span>':'';
@@ -708,6 +713,9 @@ function openTask(id){
   const f=document.getElementById('task-form');f.reset();
   document.getElementById('rec-fields').style.display='none';
   document.getElementById('wd-group').style.display='none';
+  document.getElementById('weekly-target-group').style.display='none';
+  document.getElementById('weekly-free-hint').style.display='none';
+  document.getElementById('due-row').style.display='';
   document.querySelectorAll('.wd').forEach(b=>b.classList.remove('on'));
   document.getElementById('f-assignee').innerHTML='<option value="">— Personne —</option>'+
     S.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
@@ -719,7 +727,7 @@ function openTask(id){
     if(t.due){f.dueDate.value=t.due.slice(0,10);f.dueTime.value=t.due.slice(11,16)||'';}
     f.recurring.checked=!!t.recurring;
     f.critical.checked=!!t.critical;
-    if(t.recurring){document.getElementById('rec-fields').style.display='block';f.repeat.value=t.repeat||'jour';onRepeat(f.repeat);(t.weekDays||[]).forEach(d=>document.querySelector(`.wd[data-d="${d}"]`)?.classList.add('on'));}
+    if(t.recurring){document.getElementById('rec-fields').style.display='block';f.repeat.value=t.repeat||'jour';onRepeat(f.repeat);(t.weekDays||[]).forEach(d=>document.querySelector(`.wd[data-d="${d}"]`)?.classList.add('on'));f.weeklyTarget.value=t.weeklyTarget||1;}
   }
   renderClItems();
   document.getElementById('task-ov').classList.remove('hide');
@@ -746,6 +754,7 @@ function onRepeat(el){
   document.getElementById('wd-group').style.display=el.value==='semaine'?'block':'none';
   const isWeeklyFree=el.value==='semaine_libre';
   document.getElementById('weekly-free-hint').style.display=isWeeklyFree?'block':'none';
+  document.getElementById('weekly-target-group').style.display=isWeeklyFree?'block':'none';
   document.getElementById('due-row').style.display=isWeeklyFree?'none':'';
 }
 document.querySelectorAll('.wd').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
@@ -766,7 +775,8 @@ async function submitTask(e){
   const recurring=f.recurring.checked,repeat=recurring?f.repeat.value:null;
   const weekDays=recurring&&repeat==='semaine'?[...document.querySelectorAll('.wd.on')].map(b=>+b.dataset.d):[];
   if(recurring&&repeat==='semaine_libre'&&!due)due=nextWeekBoundary();
-  const body={title:f.title.value.trim(),cat:f.cat.value,due,recurring,repeat,weekDays,assignee:f.assignee.value||null,checklist:_clItems,critical:f.critical.checked};
+  const weeklyTarget=recurring&&repeat==='semaine_libre'?Math.max(1,+f.weeklyTarget.value||1):null;
+  const body={title:f.title.value.trim(),cat:f.cat.value,due,recurring,repeat,weekDays,weeklyTarget,assignee:f.assignee.value||null,checklist:_clItems,critical:f.critical.checked};
   try{
     const r=await fetch(editTaskId?`api/tasks/${editTaskId}`:'api/tasks',{method:editTaskId?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!r.ok)throw new Error(await r.text());

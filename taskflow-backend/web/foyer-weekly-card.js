@@ -181,6 +181,14 @@ class FoyerWeeklyCard extends HTMLElement {
     return Math.ceil(ms / 86400000);
   }
 
+  _fdate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })
+        + ' à ' + new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  }
+
   _render() {
     const root = this.shadowRoot;
     root.innerHTML = '';
@@ -212,8 +220,8 @@ class FoyerWeeklyCard extends HTMLElement {
       return;
     }
 
-    const pending = weekly.filter(t => this._daysLeft(t.due) <= 7).sort((a, b) => a.due < b.due ? -1 : 1);
-    const done = weekly.filter(t => this._daysLeft(t.due) > 7).sort((a, b) => a.title.localeCompare(b.title));
+    const pending = weekly.filter(t => !t.done).sort((a, b) => a.due < b.due ? -1 : 1);
+    const done = weekly.filter(t => t.done).sort((a, b) => a.title.localeCompare(b.title));
 
     card.innerHTML += `<div class="card-sub">${pending.length} à faire cette semaine · n'importe quel jour</div>`;
 
@@ -258,9 +266,13 @@ class FoyerWeeklyCard extends HTMLElement {
     row.className = 'task-row';
     const ico = FOYER_WEEKLY_CAT_ICONS[task.cat] || '📌';
     const daysLeft = this._daysLeft(task.due);
+    const target = task.weeklyTarget || 1;
+    const count = task.weeklyCount || 0;
+    const progress = target > 1 ? `<span class="badge badge-soon">${count}/${target}</span>` : '';
+
     let badge;
     if (isDone) {
-      badge = '<span class="badge badge-done">✓ Fait</span>';
+      badge = target > 1 ? `<span class="badge badge-done">✓ ${count}/${target}</span>` : '<span class="badge badge-done">✓ Fait</span>';
     } else if (daysLeft <= 0) {
       badge = '<span class="badge badge-late">⚠ En retard</span>';
     } else if (daysLeft === 1) {
@@ -269,11 +281,15 @@ class FoyerWeeklyCard extends HTMLElement {
       badge = `<span class="badge badge-soon">${daysLeft}j restants</span>`;
     }
 
+    const sub = task.lastDoneAt ? `<div class="task-sub">Dernière fois : ${this._fdate(task.lastDoneAt)}</div>` : '';
+
     row.innerHTML = `
       <div class="task-ico">${ico}</div>
       <div class="task-info">
         <div class="task-title">${this._esc(task.title)}</div>
+        ${sub}
       </div>
+      ${!isDone && target > 1 ? progress : ''}
       ${badge}
     `;
 

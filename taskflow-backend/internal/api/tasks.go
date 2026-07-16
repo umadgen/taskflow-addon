@@ -119,10 +119,14 @@ func (h *Handler) completeTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if task.Recurring {
-		task.Due = advanceDue(*task)
-		task.Done = false
-		task.DoneBy = nil
-		task.DoneAt = nil
+		if isWeeklyFree(*task) {
+			applyWeeklyFreeCompletion(task, body.MemberID, at)
+		} else {
+			task.Due = advanceDue(*task)
+			task.Done = false
+			task.DoneBy = nil
+			task.DoneAt = nil
+		}
 	} else {
 		task.Done = true
 		task.DoneBy = &body.MemberID
@@ -160,6 +164,41 @@ func (h *Handler) uncompleteTask(w http.ResponseWriter, r *http.Request) {
 	seq, _ := h.db.IncrSeq()
 	go h.notify(seq)
 	writeJSON(w, http.StatusOK, map[string]any{"seq": seq})
+}
+
+// isWeeklyFree indique si t est une tâche hebdomadaire "libre service"
+// (model.RepeatWeeklyFree) : une ou plusieurs fois par semaine, n'importe
+// quel jour, plutôt qu'un jour fixe.
+func isWeeklyFree(t model.Task) bool {
+	return t.Repeat != nil && *t.Repeat == model.RepeatWeeklyFree
+}
+
+// weeklyTarget renvoie le nombre de fois par semaine requis pour t (1 par défaut).
+func weeklyTarget(t model.Task) int {
+	if t.WeeklyTarget != nil && *t.WeeklyTarget > 0 {
+		return *t.WeeklyTarget
+	}
+	return 1
+}
+
+// applyWeeklyFreeCompletion incrémente le compteur hebdomadaire d'une tâche
+// "libre service" sans avancer son échéance : le cycle (et le compteur) ne
+// sont réinitialisés qu'au passage de semaine par RolloverWeeklyTasks.
+func applyWeeklyFreeCompletion(task *model.Task, memberID, at string) {
+	target := weeklyTarget(*task)
+	if task.WeeklyCount < target {
+		task.WeeklyCount++
+	}
+	task.LastDoneAt = &at
+	task.Done = task.WeeklyCount >= target
+	if task.Done {
+		mID := memberID
+		task.DoneBy = &mID
+		task.DoneAt = &at
+	} else {
+		task.DoneBy = nil
+		task.DoneAt = nil
+	}
 }
 
 // advanceDue calcule la prochaine échéance d'une tâche récurrente.
