@@ -30,6 +30,9 @@ var cardJS []byte
 //go:embed web/foyer-pets-card.js
 var petsCardJS []byte
 
+//go:embed web/foyer-weekly-card.js
+var weeklyCardJS []byte
+
 //go:embed web/admin.html
 var adminHTML []byte
 
@@ -37,11 +40,13 @@ var adminHTML []byte
 var configYAML []byte
 
 const (
-	cardDest      = "/config/www/taskflow/foyer-tasks-card.js"
-	cardPath      = "/local/taskflow/foyer-tasks-card.js"
-	petsCardDest  = "/config/www/taskflow/foyer-pets-card.js"
-	petsCardPath  = "/local/taskflow/foyer-pets-card.js"
-	supervisorAPI = "http://supervisor/core/api"
+	cardDest       = "/config/www/taskflow/foyer-tasks-card.js"
+	cardPath       = "/local/taskflow/foyer-tasks-card.js"
+	petsCardDest   = "/config/www/taskflow/foyer-pets-card.js"
+	petsCardPath   = "/local/taskflow/foyer-pets-card.js"
+	weeklyCardDest = "/config/www/taskflow/foyer-weekly-card.js"
+	weeklyCardPath = "/local/taskflow/foyer-weekly-card.js"
+	supervisorAPI  = "http://supervisor/core/api"
 )
 
 // addonVersion reads the version from the embedded config.yaml so the
@@ -100,7 +105,13 @@ func main() {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Write(petsCardJS)
 	})
+	r.Get("/foyer-weekly-card.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Write(weeklyCardJS)
+	})
 	h.Mount(r)
+
+	go runWeeklyRollover(h)
 
 	log.Printf("foyer-go listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
@@ -123,6 +134,9 @@ func bootstrap(token string) {
 	if err := os.WriteFile(petsCardDest, petsCardJS, 0o644); err != nil {
 		log.Printf("bootstrap: write pets card: %v", err)
 	}
+	if err := os.WriteFile(weeklyCardDest, weeklyCardJS, 0o644); err != nil {
+		log.Printf("bootstrap: write weekly card: %v", err)
+	}
 	log.Printf("bootstrap: cards écrites dans /config/www/taskflow/")
 
 	if token == "" {
@@ -132,6 +146,7 @@ func bootstrap(token string) {
 	v := addonVersion()
 	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", cardPath, v))
 	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", petsCardPath, v))
+	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", weeklyCardPath, v))
 
 	// First install only: restart HA Core so it registers the /local/ static route.
 	// The marker file persists in /data/ (add-on data volume) across restarts.
@@ -188,6 +203,17 @@ func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
 		case <-ticker.C:
 			publish()
 		}
+	}
+}
+
+// runWeeklyRollover clôture périodiquement les tâches hebdomadaires "libre
+// service" dont la semaine est passée sans être cochées (voir RolloverWeeklyTasks).
+func runWeeklyRollover(h *api.Handler) {
+	h.RolloverWeeklyTasks()
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.RolloverWeeklyTasks()
 	}
 }
 

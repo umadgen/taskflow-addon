@@ -43,6 +43,14 @@ type Task struct {
 	FreqText  *string         `json:"freqText,omitempty"`
 	Checklist []ChecklistItem `json:"checklist,omitempty"`
 	Critical  bool            `json:"critical,omitempty"`
+
+	// WeeklyTarget/WeeklyCount ne s'appliquent qu'aux tâches Repeat==RepeatWeeklyFree :
+	// nombre de fois requis par semaine et nombre de fois déjà faites ce cycle-ci.
+	// LastDoneAt garde la dernière date de complétion à travers les remises à zéro
+	// hebdomadaires (contrairement à DoneAt, réinitialisé à chaque cycle).
+	WeeklyTarget *int    `json:"weeklyTarget,omitempty"`
+	WeeklyCount  int     `json:"weeklyCount,omitempty"`
+	LastDoneAt   *string `json:"lastDoneAt,omitempty"`
 }
 
 type HistoryEntry struct {
@@ -59,7 +67,13 @@ const (
 	HistActionCompleted = "completed"
 	HistActionPostponed = "postponed"
 	HistActionSkipped   = "skipped"
+	HistActionMissed    = "missed"
 )
+
+// RepeatWeeklyFree identifie une tâche hebdomadaire "libre service" :
+// à faire une fois n'importe quel jour de la semaine (lundi-dimanche),
+// sans jour fixe contrairement au Repeat "semaine" classique.
+const RepeatWeeklyFree = "semaine_libre"
 
 type Vaccine struct {
 	ID    string `json:"id"`

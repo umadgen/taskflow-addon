@@ -113,18 +113,22 @@ func (h *Handler) handleOps(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if task.Recurring {
-			task.Due = advanceDue(*task)
-			// vacation mode: skip past the vacation period
-			settings, _ := h.db.GetSettings()
-			today := time.Now().Format("2006-01-02")
-			if settings.VacationMode && settings.VacationUntil >= today {
-				for task.Due[:10] <= settings.VacationUntil {
-					task.Due = advanceDue(*task)
+			if isWeeklyFree(*task) {
+				applyWeeklyFreeCompletion(task, op.MemberID, at)
+			} else {
+				task.Due = advanceDue(*task)
+				// vacation mode: skip past the vacation period
+				settings, _ := h.db.GetSettings()
+				today := time.Now().Format("2006-01-02")
+				if settings.VacationMode && settings.VacationUntil >= today {
+					for task.Due[:10] <= settings.VacationUntil {
+						task.Due = advanceDue(*task)
+					}
 				}
+				task.Done = false
+				task.DoneBy = nil
+				task.DoneAt = nil
 			}
-			task.Done = false
-			task.DoneBy = nil
-			task.DoneAt = nil
 		} else {
 			task.Done = true
 			task.DoneBy = &op.MemberID
