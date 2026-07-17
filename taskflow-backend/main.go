@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	_ "embed"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -145,9 +144,11 @@ func bootstrap(token string) {
 		return
 	}
 	v := addonVersion()
-	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", cardPath, v))
-	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", petsCardPath, v))
-	registerLovelaceResource(token, fmt.Sprintf("%s?v=%s", weeklyCardPath, v))
+	registerLovelaceResources(token, []string{
+		fmt.Sprintf("%s?v=%s", cardPath, v),
+		fmt.Sprintf("%s?v=%s", petsCardPath, v),
+		fmt.Sprintf("%s?v=%s", weeklyCardPath, v),
+	})
 
 	// First install only: restart HA Core so it registers the /local/ static route.
 	// The marker file persists in /data/ (add-on data volume) across restarts.
@@ -259,72 +260,6 @@ func publishHASensor(token string, snap model.MQTTSnapshot, settings model.Setti
 // registered under an older/unversioned URL can still be matched by path.
 func resourcePath(url string) string {
 	return strings.SplitN(url, "?", 2)[0]
-}
-
-func registerLovelaceResource(token, url string) {
-	client := &http.Client{}
-	path := resourcePath(url)
-
-	// Vérifier si la ressource est déjà enregistrée (avec la même version)
-	req, _ := http.NewRequest("GET", supervisorAPI+"/lovelace/resources", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("bootstrap: HA API injoignable: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		log.Printf("bootstrap: GET lovelace/resources a répondu %d : %s", resp.StatusCode, body)
-		return
-	}
-
-	var resources []struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&resources); err != nil {
-		log.Printf("bootstrap: décodage réponse lovelace/resources : %v", err)
-		return
-	}
-	for _, r := range resources {
-		if r.URL == url {
-			log.Printf("bootstrap: ressource Lovelace déjà à jour (%s)", url)
-			return
-		}
-		if resourcePath(r.URL) == path {
-			// Une version antérieure est enregistrée sous la même URL de base :
-			// on la supprime pour forcer le navigateur à recharger le module
-			// (sinon l'URL ne change jamais et le JS reste caché indéfiniment).
-			delReq, _ := http.NewRequest("DELETE", supervisorAPI+"/lovelace/resources/"+r.ID, nil)
-			delReq.Header.Set("Authorization", "Bearer "+token)
-			if delResp, delErr := client.Do(delReq); delErr != nil {
-				log.Printf("bootstrap: suppression ancienne ressource: %v", delErr)
-			} else {
-				delResp.Body.Close()
-				log.Printf("bootstrap: ancienne ressource Lovelace supprimée (%s)", r.URL)
-			}
-		}
-	}
-
-	// Enregistrer
-	payload, _ := json.Marshal(map[string]string{"url": url, "res_type": "module"})
-	req, _ = http.NewRequest("POST", supervisorAPI+"/lovelace/resources", bytes.NewReader(payload))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	resp2, err := client.Do(req)
-	if err != nil {
-		log.Printf("bootstrap: enregistrement ressource: %v", err)
-		return
-	}
-	defer resp2.Body.Close()
-	if resp2.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp2.Body)
-		log.Printf("bootstrap: POST lovelace/resources (%s) a répondu %d : %s", url, resp2.StatusCode, body)
-		return
-	}
-	log.Printf("bootstrap: ressource Lovelace enregistrée (%s)", url)
 }
 
 type haOptions struct {
