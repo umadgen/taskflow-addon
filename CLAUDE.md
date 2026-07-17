@@ -18,7 +18,18 @@ Chaque bump de version doit ajouter une entrée en tête de `taskflow-backend/CH
 
 Une ligne par changement notable ; plusieurs lignes si le bump groupe plusieurs changements.
 
-**3. Convention de commit**
-Suivre le style déjà en place dans l'historique : `type: vX.Y.Z - description courte` (`feat:`, `fix:`, ou `chore:` selon la nature du changement), avec le bump de `config.yaml` et l'entrée `CHANGELOG.md` inclus dans le même commit que le changement qu'ils documentent.
+**3. Convention de commit et de PR — Conventional Commits, en anglais**
+Les messages de commit et les titres de PR doivent suivre [Conventional Commits](https://www.conventionalcommits.org/), toujours en anglais :
 
-Ces trois éléments (code, version, changelog) doivent toujours être commités ensemble — jamais le code seul.
+```
+<type>(<scope>): <description>
+```
+
+- Types : `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `ci`, `build`.
+- `scope` optionnel entre parenthèses (ex: `feat(weekly-tasks): ...`).
+- Description en anglais, à l'impératif, minuscule, sans point final.
+- Le numéro de version va dans le corps du commit (ex: `Bumps version to 1.6.22.`), pas dans le sujet.
+
+Ceci remplace l'ancienne convention `type: vX.Y.Z - description` en français visible plus tôt dans l'historique — ne pas la reproduire pour les nouveaux commits.
+
+Le bump de `config.yaml` et l'entrée `CHANGELOG.md` restent inclus dans le même commit que le changement qu'ils documentent : code, version et changelog doivent toujours être commités ensemble, jamais le code seul.

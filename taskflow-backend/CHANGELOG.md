@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.22
+
+- Documente dans CLAUDE.md que les commits et titres de PR doivent suivre Conventional Commits, en anglais.
+
 ## 1.6.21
 
 - Introduit ce changelog, visible directement dans l'interface de l'add-on Home Assistant.
