@@ -72,45 +72,110 @@ const FOYER_WEEKLY_CSS = `
   }
 
   .picker-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,.5);
-    display: flex; align-items: flex-end; justify-content: center;
-    opacity: 0; pointer-events: none;
-    transition: opacity .2s;
-    z-index: 10;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 9999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease;
   }
   @media (min-width: 480px) { .picker-overlay { align-items: center; } }
   .picker-overlay.open { opacity: 1; pointer-events: auto; }
+
   .picker-modal {
-    background: var(--card-background-color, #fff);
-    border-radius: 16px 16px 0 0;
-    padding: 20px;
-    width: 100%; max-width: 380px;
-    transform: translateY(24px);
-    transition: transform .2s;
+    background: var(--card-background-color);
+    border-radius: 24px 24px 0 0;
+    padding: 12px 24px 32px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 -8px 32px rgba(0,0,0,.2);
+    transform: translateY(32px);
+    transition: transform .2s cubic-bezier(.34,1.56,.64,1);
   }
-  @media (min-width: 480px) { .picker-modal { border-radius: 16px; transform: scale(.95); } }
-  .picker-overlay.open .picker-modal { transform: none; }
-  .picker-eyebrow { font-size: 12px; color: var(--secondary-text-color); margin-bottom: 2px; }
-  .picker-task-name { font-size: 16px; font-weight: 700; color: var(--primary-text-color); margin-bottom: 16px; }
-  .people-row { display: flex; flex-wrap: wrap; gap: 12px; }
+  @media (min-width: 480px) {
+    .picker-modal { border-radius: 24px; padding-bottom: 24px; transform: scale(.95); }
+    .picker-overlay.open .picker-modal { transform: scale(1); }
+  }
+  .picker-overlay.open .picker-modal { transform: translateY(0); }
+
+  .picker-drag {
+    width: 36px; height: 4px;
+    background: var(--divider-color, rgba(0,0,0,.15));
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  @media (min-width: 480px) { .picker-drag { display: none; } }
+
+  .picker-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--secondary-text-color);
+    margin-bottom: 6px;
+  }
+  .picker-task-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary-text-color);
+    margin-bottom: 24px;
+    line-height: 1.3;
+  }
+
+  .people-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
   .person-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    background: none; border: none; cursor: pointer; padding: 4px;
+    flex: 1;
+    min-width: 80px;
+    background: transparent;
+    border: 2px solid var(--c, #888);
+    border-radius: 16px;
+    padding: 14px 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .12s, transform .1s;
+  }
+  .person-btn:active {
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+    transform: scale(.97);
   }
   .person-avatar {
-    width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--c, #888); color: #fff; font-weight: 700; font-size: 16px;
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--c, #888);
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .person-name { font-size: 11px; color: var(--primary-text-color); }
+  .person-name { font-size: 13px; font-weight: 600; color: var(--c, #888); }
+
   .picker-cancel {
-    margin-top: 16px; width: 100%; padding: 10px;
-    border: none; border-radius: 10px;
-    background: var(--secondary-background-color, #f0f0f0);
-    color: var(--primary-text-color); font-size: 13px; font-weight: 600;
+    width: 100%;
+    padding: 12px;
+    background: var(--secondary-background-color, rgba(0,0,0,.05));
+    border: none;
+    border-radius: 12px;
+    color: var(--secondary-text-color);
+    font-size: 14px;
     cursor: pointer;
+    transition: background .1s;
   }
+  .picker-cancel:active { background: var(--divider-color, rgba(0,0,0,.1)); }
 `;
 
 class FoyerWeeklyCard extends HTMLElement {
@@ -248,6 +313,7 @@ class FoyerWeeklyCard extends HTMLElement {
     overlay.className = 'picker-overlay';
     overlay.innerHTML = `
       <div class="picker-modal">
+        <div class="picker-drag"></div>
         <div class="picker-eyebrow">Qui a fait ça ?</div>
         <div class="picker-task-name"></div>
         <div class="people-row"></div>
