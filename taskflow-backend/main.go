@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	_ "embed"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -273,12 +274,20 @@ func registerLovelaceResource(token, url string) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("bootstrap: GET lovelace/resources a répondu %d : %s", resp.StatusCode, body)
+		return
+	}
 
 	var resources []struct {
 		ID  string `json:"id"`
 		URL string `json:"url"`
 	}
-	json.NewDecoder(resp.Body).Decode(&resources)
+	if err := json.NewDecoder(resp.Body).Decode(&resources); err != nil {
+		log.Printf("bootstrap: décodage réponse lovelace/resources : %v", err)
+		return
+	}
 	for _, r := range resources {
 		if r.URL == url {
 			log.Printf("bootstrap: ressource Lovelace déjà à jour (%s)", url)
@@ -310,6 +319,11 @@ func registerLovelaceResource(token, url string) {
 		return
 	}
 	defer resp2.Body.Close()
+	if resp2.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp2.Body)
+		log.Printf("bootstrap: POST lovelace/resources (%s) a répondu %d : %s", url, resp2.StatusCode, body)
+		return
+	}
 	log.Printf("bootstrap: ressource Lovelace enregistrée (%s)", url)
 }
 
