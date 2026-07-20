@@ -3,15 +3,13 @@ package api
 import (
 	"log"
 	"time"
-
-	"foyer/taskflow/internal/model"
 )
 
 // RolloverWeeklyTasks clôture les tâches hebdomadaires "libre service"
-// (model.RepeatWeeklyFree) dont le cycle est terminé (Due dépassé) sans
-// avoir été cochées : une entrée d'historique "missed" est tracée, puis la
-// tâche est réinitialisée pour la semaine suivante. Appelée périodiquement
-// depuis main.go, faute de scheduler côté navigateur pour ces tâches.
+// (model.RepeatWeeklyFree) dont le cycle est terminé (Due dépassé), qu'elles
+// aient été cochées ou non, et les réinitialise pour la semaine suivante.
+// Appelée périodiquement depuis main.go, faute de scheduler côté navigateur
+// pour ces tâches.
 func (h *Handler) RolloverWeeklyTasks() {
 	tasks, err := h.db.GetTasks()
 	if err != nil {
@@ -27,25 +25,6 @@ func (h *Handler) RolloverWeeklyTasks() {
 		}
 		if t.Due > now {
 			continue
-		}
-
-		// Trace une entrée "non faite" uniquement si l'objectif de la semaine
-		// (WeeklyTarget occurrences) n'a pas été atteint. Un cycle pleinement
-		// complété se réinitialise silencieusement.
-		if t.WeeklyCount < weeklyTarget(t) {
-			entry := model.HistoryEntry{
-				ID:     newID(),
-				Title:  t.Title,
-				Cat:    t.Cat,
-				By:     "",
-				At:     t.Due,
-				TaskID: t.ID,
-				Action: model.HistActionMissed,
-			}
-			if err := h.db.InsertHistory(entry); err != nil {
-				log.Printf("weekly-rollover: InsertHistory %s: %v", t.ID, err)
-				continue
-			}
 		}
 
 		t.Due = advanceDue(t)

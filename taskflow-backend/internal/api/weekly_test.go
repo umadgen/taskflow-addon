@@ -69,7 +69,7 @@ func TestCompleteWeeklyFreeWithTargetRequiresMultipleCompletions(t *testing.T) {
 	}
 }
 
-func TestRolloverWeeklyTasksLogsMissedAndResets(t *testing.T) {
+func TestRolloverWeeklyTasksResetsWithoutHistoryEntry(t *testing.T) {
 	h := newTestHandler(t)
 	past := time.Now().Add(-2 * time.Hour).Format("2006-01-02T15:04")
 	doReq(t, h, http.MethodPost, "/api/tasks",
@@ -97,8 +97,8 @@ func TestRolloverWeeklyTasksLogsMissedAndResets(t *testing.T) {
 	resp = doReq(t, h, http.MethodGet, "/api/history", "")
 	var hist []model.HistoryEntry
 	decodeJSON(t, resp, &hist)
-	if len(hist) != 1 || hist[0].Action != model.HistActionMissed || hist[0].TaskID != "t1" {
-		t.Fatalf("expected one 'missed' history entry for t1, got %+v", hist)
+	if len(hist) != 0 {
+		t.Fatalf("rollover should not log any history entry, got %+v", hist)
 	}
 }
 
