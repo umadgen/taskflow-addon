@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"foyer/taskflow/internal/model"
 )
@@ -85,6 +86,9 @@ func (h *Handler) bulkCreateTasks(w http.ResponseWriter, r *http.Request) {
 			Time:      in.Time,
 			FreqText:  in.FreqText,
 			Checklist: in.Checklist,
+		}
+		if isWeeklyFree(task) && !isWeeklyFreeAligned(task.Due) {
+			task.Due = weeklyFreeDue(time.Now())
 		}
 
 		if name := strings.ToLower(strings.TrimSpace(in.Assignee)); name != "" {

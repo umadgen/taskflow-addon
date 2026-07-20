@@ -3,15 +3,13 @@ package api
 import (
 	"log"
 	"time"
-
-	"foyer/taskflow/internal/model"
 )
 
 // RolloverWeeklyTasks clôture les tâches hebdomadaires "libre service"
-// (model.RepeatWeeklyFree) dont le cycle est terminé (Due dépassé) sans
-// avoir été cochées : une entrée d'historique "missed" est tracée, puis la
-// tâche est réinitialisée pour la semaine suivante. Appelée périodiquement
-// depuis main.go, faute de scheduler côté navigateur pour ces tâches.
+// (model.RepeatWeeklyFree) dont le cycle est terminé (Due dépassé), qu'elles
+// aient été cochées ou non, et les réinitialise pour la semaine suivante.
+// Appelée périodiquement depuis main.go, faute de scheduler côté navigateur
+// pour ces tâches.
 func (h *Handler) RolloverWeeklyTasks() {
 	tasks, err := h.db.GetTasks()
 	if err != nil {
@@ -29,25 +27,6 @@ func (h *Handler) RolloverWeeklyTasks() {
 			continue
 		}
 
-		// Trace une entrée "non faite" uniquement si l'objectif de la semaine
-		// (WeeklyTarget occurrences) n'a pas été atteint. Un cycle pleinement
-		// complété se réinitialise silencieusement.
-		if t.WeeklyCount < weeklyTarget(t) {
-			entry := model.HistoryEntry{
-				ID:     newID(),
-				Title:  t.Title,
-				Cat:    t.Cat,
-				By:     "",
-				At:     t.Due,
-				TaskID: t.ID,
-				Action: model.HistActionMissed,
-			}
-			if err := h.db.InsertHistory(entry); err != nil {
-				log.Printf("weekly-rollover: InsertHistory %s: %v", t.ID, err)
-				continue
-			}
-		}
-
 		t.Due = advanceDue(t)
 		t.WeeklyCount = 0
 		t.Done = false
@@ -58,6 +37,40 @@ func (h *Handler) RolloverWeeklyTasks() {
 			log.Printf("weekly-rollover: UpsertTask %s: %v", t.ID, err)
 			continue
 		}
+		changed = true
+	}
+
+	if changed {
+		if seq, err := h.db.IncrSeq(); err == nil {
+			h.notify(seq)
+		}
+	}
+}
+
+// NormalizeWeeklyFreeDueDates recale sur le prochain lundi 00:00 toute tâche
+// "libre service" dont la Due a dérivé (créée/éditée avant que le serveur
+// n'impose systématiquement cette frontière — voir weeklyFreeDue). Le
+// compteur/l'état de la semaine en cours sont conservés : seule la date
+// affichée est corrigée. Appelée une fois au démarrage.
+func (h *Handler) NormalizeWeeklyFreeDueDates() {
+	tasks, err := h.db.GetTasks()
+	if err != nil {
+		log.Printf("weekly-normalize: GetTasks: %v", err)
+		return
+	}
+
+	now := time.Now()
+	changed := false
+	for _, t := range tasks {
+		if !isWeeklyFree(t) || isWeeklyFreeAligned(t.Due) {
+			continue
+		}
+		t.Due = weeklyFreeDue(now)
+		if err := h.db.UpsertTask(t); err != nil {
+			log.Printf("weekly-normalize: UpsertTask %s: %v", t.ID, err)
+			continue
+		}
+		log.Printf("weekly-normalize: %s recalée sur %s", t.ID, t.Due)
 		changed = true
 	}
 
