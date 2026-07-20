@@ -30,6 +30,9 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 	if t.ID == "" {
 		t.ID = newID()
 	}
+	if isWeeklyFree(t) && !isWeeklyFreeAligned(t.Due) {
+		t.Due = weeklyFreeDue(time.Now())
+	}
 	if err := h.db.UpsertTask(t); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -55,6 +58,9 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	existing.ID = id
+	if isWeeklyFree(*existing) && !isWeeklyFreeAligned(existing.Due) {
+		existing.Due = weeklyFreeDue(time.Now())
+	}
 	if err := h.db.UpsertTask(*existing); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -179,6 +185,31 @@ func weeklyTarget(t model.Task) int {
 		return *t.WeeklyTarget
 	}
 	return 1
+}
+
+// weeklyFreeDue calcule la frontière de cycle (prochain lundi 00:00) d'une
+// tâche hebdomadaire "libre service" à partir de now. Utilisée pour corriger
+// côté serveur toute Due mal alignée (formulaire, import en masse, ancienne
+// donnée) afin que toutes les tâches semaine_libre partagent le même repère
+// hebdomadaire. Reprend exactement la logique de nextWeekBoundary() côté
+// admin.html.
+func weeklyFreeDue(now time.Time) string {
+	const layout = "2006-01-02T15:04"
+	goWD := int(now.Weekday()) // 0=Dim…6=Sam
+	tfWD := (goWD + 6) % 7     // 0=Lun…6=Dim
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return midnight.AddDate(0, 0, 7-tfWD).Format(layout)
+}
+
+// isWeeklyFreeAligned indique si due tombe exactement sur la frontière de
+// cycle attendue (un lundi 00:00), au format stocké par weeklyFreeDue/le
+// formulaire admin.
+func isWeeklyFreeAligned(due string) bool {
+	t, err := time.Parse("2006-01-02T15:04", due)
+	if err != nil {
+		return false
+	}
+	return t.Weekday() == time.Monday && t.Hour() == 0 && t.Minute() == 0
 }
 
 // applyWeeklyFreeCompletion incrémente le compteur hebdomadaire d'une tâche

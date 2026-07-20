@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.24
+
+- Corrige la désynchronisation des tâches hebdomadaires "n'importe quel jour" : l'échéance de ces tâches est maintenant toujours recalée sur le lundi 00:00 par le serveur, au lieu de dépendre d'un champ de formulaire pouvant garder une valeur périmée. Les tâches déjà désynchronisées sont corrigées automatiquement au démarrage.
+
 ## 1.6.23
 
 - Retire l'entrée "non faite" (?) que la réinitialisation hebdomadaire ajoutait automatiquement à l'historique : les tâches hebdomadaires non cochées à temps se réinitialisent maintenant silencieusement, sans polluer l'historique.

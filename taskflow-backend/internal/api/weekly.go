@@ -46,3 +46,37 @@ func (h *Handler) RolloverWeeklyTasks() {
 		}
 	}
 }
+
+// NormalizeWeeklyFreeDueDates recale sur le prochain lundi 00:00 toute tâche
+// "libre service" dont la Due a dérivé (créée/éditée avant que le serveur
+// n'impose systématiquement cette frontière — voir weeklyFreeDue). Le
+// compteur/l'état de la semaine en cours sont conservés : seule la date
+// affichée est corrigée. Appelée une fois au démarrage.
+func (h *Handler) NormalizeWeeklyFreeDueDates() {
+	tasks, err := h.db.GetTasks()
+	if err != nil {
+		log.Printf("weekly-normalize: GetTasks: %v", err)
+		return
+	}
+
+	now := time.Now()
+	changed := false
+	for _, t := range tasks {
+		if !isWeeklyFree(t) || isWeeklyFreeAligned(t.Due) {
+			continue
+		}
+		t.Due = weeklyFreeDue(now)
+		if err := h.db.UpsertTask(t); err != nil {
+			log.Printf("weekly-normalize: UpsertTask %s: %v", t.ID, err)
+			continue
+		}
+		log.Printf("weekly-normalize: %s recalée sur %s", t.ID, t.Due)
+		changed = true
+	}
+
+	if changed {
+		if seq, err := h.db.IncrSeq(); err == nil {
+			h.notify(seq)
+		}
+	}
+}

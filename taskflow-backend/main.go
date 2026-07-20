@@ -210,7 +210,10 @@ func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
 
 // runWeeklyRollover clôture périodiquement les tâches hebdomadaires "libre
 // service" dont la semaine est passée sans être cochées (voir RolloverWeeklyTasks).
+// Recale aussi une fois au démarrage celles dont la Due aurait dérivé d'un
+// lundi (voir NormalizeWeeklyFreeDueDates).
 func runWeeklyRollover(h *api.Handler) {
+	h.NormalizeWeeklyFreeDueDates()
 	h.RolloverWeeklyTasks()
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()

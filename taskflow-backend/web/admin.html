@@ -770,11 +770,15 @@ function nextWeekBoundary(){
 
 async function submitTask(e){
   e.preventDefault();const f=e.target;
-  const dueDate=f.dueDate.value,dueTime=f.dueTime.value;
-  let due=dueDate?(dueTime?`${dueDate}T${dueTime}`:`${dueDate}T00:00`):'';
   const recurring=f.recurring.checked,repeat=recurring?f.repeat.value:null;
+  const isWeeklyFree=recurring&&repeat==='semaine_libre';
+  // Le champ échéance est masqué (et sans intérêt) pour les tâches "n'importe
+  // quel jour" : ignorer sa valeur, même pré-remplie par une édition
+  // précédente, pour ne jamais désaligner la frontière de cycle (lundi 00:00).
+  const dueDate=isWeeklyFree?'':f.dueDate.value,dueTime=isWeeklyFree?'':f.dueTime.value;
+  let due=dueDate?(dueTime?`${dueDate}T${dueTime}`:`${dueDate}T00:00`):'';
   const weekDays=recurring&&repeat==='semaine'?[...document.querySelectorAll('.wd.on')].map(b=>+b.dataset.d):[];
-  if(recurring&&repeat==='semaine_libre'&&!due)due=nextWeekBoundary();
+  if(isWeeklyFree)due=nextWeekBoundary();
   const weeklyTarget=recurring&&repeat==='semaine_libre'?Math.max(1,+f.weeklyTarget.value||1):null;
   const body={title:f.title.value.trim(),cat:f.cat.value,due,recurring,repeat,weekDays,weeklyTarget,assignee:f.assignee.value||null,checklist:_clItems,critical:f.critical.checked};
   try{
