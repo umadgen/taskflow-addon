@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.25
+
+- Corrige les tâches récurrentes (quotidiennes, hebdomadaires, mensuelles) créées sans date d'échéance dans le panneau admin qui apparaissaient aussitôt "en retard" : le formulaire fixe désormais automatiquement l'échéance à aujourd'hui, et les tâches déjà créées sans échéance sont corrigées au démarrage.
+
 ## 1.6.24
 
 - Corrige la désynchronisation des tâches hebdomadaires "n'importe quel jour" : l'échéance de ces tâches est maintenant toujours recalée sur le lundi 00:00 par le serveur, au lieu de dépendre d'un champ de formulaire pouvant garder une valeur périmée. Les tâches déjà désynchronisées sont corrigées automatiquement au démarrage.

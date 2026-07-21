@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -303,6 +304,45 @@ func advanceDueOnce(t model.Task, due time.Time) time.Time {
 
 	default:
 		return due.AddDate(0, 0, 7)
+	}
+}
+
+// NormalizeMissingRecurringDueDates assigne une échéance initiale (aujourd'hui,
+// à l'heure prévue de la tâche) à toute tâche récurrente créée sans date
+// d'échéance — le formulaire admin ne l'exige pas. Sans Due, une tâche reste
+// bloquée dans le panier "en retard" côté client : une chaîne vide y compare
+// toujours < à la date du jour. Ignore les tâches "semaine libre", dont la
+// Due est gérée séparément (voir weeklyFreeDue). Appelée une fois au démarrage.
+func (h *Handler) NormalizeMissingRecurringDueDates() {
+	tasks, err := h.db.GetTasks()
+	if err != nil {
+		log.Printf("normalize-due: GetTasks: %v", err)
+		return
+	}
+
+	today := time.Now().Format("2006-01-02")
+	changed := false
+	for _, t := range tasks {
+		if !t.Recurring || t.Due != "" || isWeeklyFree(t) {
+			continue
+		}
+		tm := "00:00"
+		if t.Time != nil && *t.Time != "" {
+			tm = *t.Time
+		}
+		t.Due = today + "T" + tm
+		if err := h.db.UpsertTask(t); err != nil {
+			log.Printf("normalize-due: UpsertTask %s: %v", t.ID, err)
+			continue
+		}
+		log.Printf("normalize-due: %s initialisée sur %s", t.ID, t.Due)
+		changed = true
+	}
+
+	if changed {
+		if seq, err := h.db.IncrSeq(); err == nil {
+			h.notify(seq)
+		}
 	}
 }
 
