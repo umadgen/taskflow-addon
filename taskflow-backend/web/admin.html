@@ -651,7 +651,7 @@ function renderStats(){
   const today=now();
   const active=S.tasks.filter(t=>!t.done);
   const due=active.filter(t=>t.due?.slice(0,10)===today).length;
-  const late=active.filter(t=>t.due?.slice(0,10)<today).length;
+  const late=active.filter(t=>t.due&&t.due.slice(0,10)<today).length;
   const rec=S.tasks.filter(t=>t.recurring).length;
   const todayH=S.history.filter(h=>h.at?.slice(0,10)===today).length;
   document.getElementById('stats').innerHTML=[
@@ -775,7 +775,12 @@ async function submitTask(e){
   // Le champ échéance est masqué (et sans intérêt) pour les tâches "n'importe
   // quel jour" : ignorer sa valeur, même pré-remplie par une édition
   // précédente, pour ne jamais désaligner la frontière de cycle (lundi 00:00).
-  const dueDate=isWeeklyFree?'':f.dueDate.value,dueTime=isWeeklyFree?'':f.dueTime.value;
+  // Une tâche récurrente (hors "semaine libre") a besoin d'une échéance réelle
+  // pour apparaître dans la bonne section côté carte foyer et pour que la
+  // récurrence puisse avancer : à défaut de saisie, on la fixe à aujourd'hui
+  // plutôt que de laisser due vide (une due vide compare toujours < à la date
+  // du jour et la tâche resterait bloquée en "en retard").
+  const dueDate=isWeeklyFree?'':(f.dueDate.value||(recurring?now():'')),dueTime=isWeeklyFree?'':f.dueTime.value;
   let due=dueDate?(dueTime?`${dueDate}T${dueTime}`:`${dueDate}T00:00`):'';
   const weekDays=recurring&&repeat==='semaine'?[...document.querySelectorAll('.wd.on')].map(b=>+b.dataset.d):[];
   if(isWeeklyFree)due=nextWeekBoundary();

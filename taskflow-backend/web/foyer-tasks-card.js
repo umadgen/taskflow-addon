@@ -1158,7 +1158,9 @@ class FoyerTasksCard extends HTMLElement {
     const todayDone = tasks.filter(t => t.done && !t.recurring && t.due?.slice(0, 10) === today);
     const byDate    = (a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
     // Exclude tasks whose due date doesn't match their recurrence rule (server-side data bug)
-    const late      = active.filter(t => filterFn(t) && ruleMatchesDue(t) && (t.late || t.due.slice(0, 10) < today)).sort(byDate);
+    // A task with no due date at all is never "late" — an empty string always
+    // compares < any date string, which would otherwise trap it in this bucket forever.
+    const late      = active.filter(t => filterFn(t) && ruleMatchesDue(t) && (t.late || (t.due && t.due.slice(0, 10) < today))).sort(byDate);
     const todayT    = active.filter(t => filterFn(t) && ruleMatchesDue(t) && !t.late && t.due.slice(0, 10) === today).sort(byDate);
     const future    = active.filter(t => filterFn(t) && (!ruleMatchesDue(t) || (!t.late && t.due.slice(0, 10) > today))).sort(byDate);
     const upcoming  = future.filter(t => t.recurring);
@@ -1952,7 +1954,7 @@ class FoyerProgressCard extends HTMLElement {
     // doneToday: all completions today (covers both recurring and non-recurring)
     const active    = tasks.filter(t => !t.done);
     const doneToday = history.filter(h => foyerLocalDateOf(h.at) === today);
-    const late      = active.filter(t => ruleOk(t) && (t.late || t.due?.slice(0, 10) < today)).length;
+    const late      = active.filter(t => ruleOk(t) && (t.late || (t.due && t.due.slice(0, 10) < today))).length;
     const todayPend = active.filter(t => ruleOk(t) && !t.late && t.due?.slice(0, 10) === today).length;
     const total     = late + todayPend + doneToday.length;
     const done      = doneToday.length;
@@ -1970,7 +1972,7 @@ class FoyerProgressCard extends HTMLElement {
         : 'var(--primary-color, #03a9f4)';
 
     const catBreakdown = Object.entries(FOYER_CAT_COLORS).map(([cat, color]) => {
-      const catActive  = active.filter(t => t.cat === cat && ruleOk(t) && (t.late || t.due?.slice(0,10) <= today));
+      const catActive  = active.filter(t => t.cat === cat && ruleOk(t) && (t.late || (t.due && t.due.slice(0,10) <= today)));
       const catDone    = doneToday.filter(h => h.cat === cat).length;
       const catTasks   = catActive.length + catDone;
       if (!catTasks) return '';

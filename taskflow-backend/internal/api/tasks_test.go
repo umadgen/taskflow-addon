@@ -115,6 +115,39 @@ func TestCompleteVeryOverdueRecurringClearsLate(t *testing.T) {
 	}
 }
 
+func TestNormalizeMissingRecurringDueDatesFillsBlankDue(t *testing.T) {
+	h := newTestHandler(t)
+	// Créée via le panneau admin sans date d'échéance (champ optionnel) :
+	// due reste une chaîne vide, ce qui la coince en permanence dans le
+	// panier "en retard" côté client (une chaîne vide compare toujours <
+	// la date du jour). Une tâche non récurrente sans due doit rester
+	// intacte : l'absence de date y est un choix valide.
+	doReq(t, h, http.MethodPost, "/api/tasks",
+		`{"id":"t1","title":"Vaisselle","cat":"maison","due":"","recurring":true,"repeat":"jour","time":"08:00"}`)
+	doReq(t, h, http.MethodPost, "/api/tasks",
+		`{"id":"t2","title":"Un jour peut-être","cat":"maison","due":"","recurring":false}`)
+
+	h.NormalizeMissingRecurringDueDates()
+
+	resp := doReq(t, h, http.MethodGet, "/api/tasks", "")
+	var tasks []model.Task
+	decodeJSON(t, resp, &tasks)
+
+	today := time.Now().Format("2006-01-02")
+	for _, task := range tasks {
+		switch task.ID {
+		case "t1":
+			if task.Due != today+"T08:00" {
+				t.Fatalf("expected recurring task due filled to %sT08:00, got %q", today, task.Due)
+			}
+		case "t2":
+			if task.Due != "" {
+				t.Fatalf("non-recurring task without a due date should be left untouched, got %q", task.Due)
+			}
+		}
+	}
+}
+
 func TestUncompleteTask(t *testing.T) {
 	h := newTestHandler(t)
 	doReq(t, h, http.MethodPost, "/api/tasks",
