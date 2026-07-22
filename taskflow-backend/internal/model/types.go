@@ -67,6 +67,7 @@ const (
 	HistActionCompleted = "completed"
 	HistActionPostponed = "postponed"
 	HistActionSkipped   = "skipped"
+	HistActionMissed    = "missed"
 )
 
 // RepeatWeeklyFree identifie une tâche hebdomadaire "libre service" :
