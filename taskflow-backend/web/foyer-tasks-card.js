@@ -1869,15 +1869,21 @@ class FoyerHistoryCard extends HTMLElement {
       const actionMeta = {
         postponed: { icon: '⏩', verb: 'a reporté' },
         skipped:   { icon: '⏭', verb: 'a ignoré' },
+        missed:    { icon: '⚠️', label: 'Non complétée' },
       }[entry.action];
       const rowIcon = actionMeta?.icon ?? catIcon;
       const verb    = actionMeta?.verb ?? null;
+      // "missed" entries have no member (nobody did the task) — show a plain
+      // label instead of falling back to an unattributed "?" avatar/name.
+      const metaLine = actionMeta?.label
+        ? actionMeta.label
+        : `${avatar}${foyerEsc(member?.name ?? '?')}${verb ? ` ${verb}` : ''}`;
       return `
         <div class="hist-row">
           <div class="hist-dot" style="background:${catColor}"></div>
           <span class="hist-icon">${rowIcon}</span>
           <span class="hist-name">${foyerEsc(entry.title)}</span>
-          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${avatar}${foyerEsc(member?.name ?? '?')}${verb ? ` ${verb}` : ''} · ${foyerFormatAt(entry.at)}</span>
+          <span class="hist-meta" style="display:flex;align-items:center;gap:4px">${metaLine} · ${foyerFormatAt(entry.at)}</span>
         </div>
       `;
     }).join('');
@@ -1989,7 +1995,8 @@ class FoyerProgressCard extends HTMLElement {
     }).join('');
 
     const weekStart = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
-    const weekCount = history.filter(h => foyerLocalDateOf(h.at) >= weekStart).length;
+    // "missed" entries mark a day nobody did the task — they must not inflate this count.
+    const weekCount = history.filter(h => h.action !== 'missed' && foyerLocalDateOf(h.at) >= weekStart).length;
 
     this.shadowRoot.innerHTML = `
       <style>

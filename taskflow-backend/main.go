@@ -209,7 +209,9 @@ func runHASensorPublisher(token string, database *db.DB, hub *ws.Hub) {
 }
 
 // runWeeklyRollover clôture périodiquement les tâches hebdomadaires "libre
-// service" dont la semaine est passée sans être cochées (voir RolloverWeeklyTasks).
+// service" dont la semaine est passée sans être cochées (voir RolloverWeeklyTasks),
+// ainsi que les autres tâches récurrentes (quotidienne, hebdomadaire à jour
+// fixe, mensuelle) dont l'échéance est dépassée (voir RolloverOverdueRecurringTasks).
 // Recale aussi une fois au démarrage celles dont la Due aurait dérivé d'un
 // lundi (voir NormalizeWeeklyFreeDueDates), et initialise la Due des tâches
 // récurrentes qui en manquent (voir NormalizeMissingRecurringDueDates).
@@ -217,10 +219,12 @@ func runWeeklyRollover(h *api.Handler) {
 	h.NormalizeWeeklyFreeDueDates()
 	h.NormalizeMissingRecurringDueDates()
 	h.RolloverWeeklyTasks()
+	h.RolloverOverdueRecurringTasks()
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
 		h.RolloverWeeklyTasks()
+		h.RolloverOverdueRecurringTasks()
 	}
 }
 

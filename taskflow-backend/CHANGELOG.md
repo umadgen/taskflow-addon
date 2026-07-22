@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.26
+
+- Corrige les tâches récurrentes (quotidiennes, hebdomadaires à jour fixe, mensuelles) non cochées à temps : au lieu de rester "en retard" et d'obliger à les faire deux fois (une pour rattraper le retard, une pour aujourd'hui), elles sont désormais tracées comme "non complétée" dans l'historique puis reprennent normalement le jour suivant.
+
 ## 1.6.25
 
 - Corrige les tâches récurrentes (quotidiennes, hebdomadaires, mensuelles) créées sans date d'échéance dans le panneau admin qui apparaissaient aussitôt "en retard" : le formulaire fixe désormais automatiquement l'échéance à aujourd'hui, et les tâches déjà créées sans échéance sont corrigées au démarrage.
