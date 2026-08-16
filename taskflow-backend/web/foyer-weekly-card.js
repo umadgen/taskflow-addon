@@ -101,6 +101,7 @@ const FOYER_WEEKLY_CSS = `
     .picker-overlay.open .picker-modal { transform: scale(1); }
   }
   .picker-overlay.open .picker-modal { transform: translateY(0); }
+  .picker-modal:focus { outline: none; }
 
   .picker-drag {
     width: 36px; height: 4px;
@@ -188,6 +189,10 @@ class FoyerWeeklyCard extends HTMLElement {
     this._error = null;
     this._pollTimer = null;
     this._pendingTask = null;
+    // Keeps background scroll/keyboard focus off the dashboard while the
+    // picker is open — attached once here since the shadow root itself
+    // survives across the full re-renders _render() does on every poll.
+    this.shadowRoot.addEventListener('keydown', e => this._onOverlayKeydown(e));
   }
 
   setConfig(config) {
@@ -201,6 +206,12 @@ class FoyerWeeklyCard extends HTMLElement {
 
   disconnectedCallback() {
     if (this._pollTimer) clearInterval(this._pollTimer);
+    // Don't leave the dashboard's scroll permanently locked if the card is
+    // detached (view switch) while the picker is open.
+    if (this._pendingTask) {
+      const s = document.body.style;
+      s.position = s.top = s.left = s.right = s.width = '';
+    }
   }
 
   // HA compatibility — hass is passed but we don't need it for API calls
@@ -312,7 +323,7 @@ class FoyerWeeklyCard extends HTMLElement {
     const overlay = document.createElement('div');
     overlay.className = 'picker-overlay';
     overlay.innerHTML = `
-      <div class="picker-modal">
+      <div class="picker-modal" tabindex="-1">
         <div class="picker-drag"></div>
         <div class="picker-eyebrow">Qui a fait ça ?</div>
         <div class="picker-task-name"></div>
@@ -325,6 +336,11 @@ class FoyerWeeklyCard extends HTMLElement {
     root.appendChild(overlay);
 
     root.appendChild(card);
+
+    // The 30s poll calls _render() unconditionally, which just rebuilt the
+    // overlay from scratch above — re-show the picker instead of silently
+    // dropping it if one was open when the poll landed.
+    if (this._pendingTask) this._openPicker(this._pendingTask);
   }
 
   _taskRow(task, isDone) {
@@ -369,6 +385,7 @@ class FoyerWeeklyCard extends HTMLElement {
   }
 
   _openPicker(task) {
+    const wasOpen = this._pendingTask != null;
     this._pendingTask = task;
     const root = this.shadowRoot;
     root.querySelector('.picker-task-name').textContent = task.title;
@@ -388,12 +405,61 @@ class FoyerWeeklyCard extends HTMLElement {
       });
     });
 
-    root.querySelector('.picker-overlay').classList.add('open');
+    const overlay = root.querySelector('.picker-overlay');
+    overlay.classList.add('open');
+    // wasOpen is true when a poll refresh rebuilt the overlay while the
+    // picker was already up — the scroll lock below is still in effect
+    // from the first open, so don't stack another one on top of it.
+    if (!wasOpen) {
+      this._lockScroll();
+      this._focusModal(overlay.querySelector('.picker-modal'));
+    }
   }
 
   _closePicker() {
-    this.shadowRoot.querySelector('.picker-overlay')?.classList.remove('open');
+    const overlay = this.shadowRoot.querySelector('.picker-overlay');
+    if (overlay?.classList.contains('open')) this._unlockScroll();
+    overlay?.classList.remove('open');
     this._pendingTask = null;
+  }
+
+  // ── Modal scroll lock & focus trap ──────────────────────────────────────
+  // Without this, the dashboard behind the overlay keeps scrolling under a
+  // dragging finger on touch devices, which eats the tap meant for a
+  // person button in the picker.
+  _lockScroll() {
+    this._scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const s = document.body.style;
+    s.position = 'fixed';
+    s.top      = `-${this._scrollY}px`;
+    s.left     = '0';
+    s.right    = '0';
+    s.width    = '100%';
+  }
+
+  _unlockScroll() {
+    const s = document.body.style;
+    s.position = s.top = s.left = s.right = s.width = '';
+    window.scrollTo(0, this._scrollY || 0);
+  }
+
+  _focusModal(el) {
+    clearTimeout(this._focusTimer);
+    this._focusTimer = setTimeout(() => el?.focus(), 220);
+  }
+
+  _onOverlayKeydown(e) {
+    const overlay = this.shadowRoot.querySelector('.picker-overlay.open');
+    if (!overlay) return;
+    if (e.key === 'Escape') { e.preventDefault(); this._closePicker(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = [...overlay.querySelectorAll('button, input, [tabindex]')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    const active = this.shadowRoot.activeElement;
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
   }
 
   async _completeTask(memberId) {

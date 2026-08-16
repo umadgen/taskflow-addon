@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.27
+
+- Corrige les modales tactiles (choix de qui a fait/décale/ignore une tâche, menu d'une tâche, gestion des membres, tâches hebdomadaires) : l'arrière-plan ne défile plus sous le doigt pendant qu'une modale est ouverte, ce qui empêchait parfois un appui de fonctionner, et la modale reçoit désormais le focus à l'ouverture.
+
 ## 1.6.26
 
 - Corrige les tâches récurrentes (quotidiennes, hebdomadaires à jour fixe, mensuelles) non cochées à temps : au lieu de rester "en retard" et d'obliger à les faire deux fois (une pour rattraper le retard, une pour aujourd'hui), elles sont désormais tracées comme "non complétée" dans l'historique puis reprennent normalement le jour suivant.
