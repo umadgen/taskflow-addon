@@ -89,6 +89,13 @@ class FoyerTasksCard extends HTMLElement {
   disconnectedCallback() {
     if (this._dayTimer) { clearInterval(this._dayTimer); this._dayTimer = null; }
     if (this._criticalTimer) { clearInterval(this._criticalTimer); this._criticalTimer = null; }
+    // If a view switch detaches the card while a modal is open, don't leave
+    // the dashboard's scroll permanently locked behind us.
+    if (this._scrollLockDepth) {
+      this._scrollLockDepth = 0;
+      const s = document.body.style;
+      s.position = s.top = s.left = s.right = s.width = '';
+    }
   }
 
   _startDayTimer() {
@@ -438,6 +445,7 @@ class FoyerTasksCard extends HTMLElement {
           .modal-overlay.open .modal { transform: scale(1); }
         }
         .modal-overlay.open .modal { transform: translateY(0); }
+        .modal:focus, .ctx-modal:focus, .members-modal:focus { outline: none; }
 
         .modal-drag {
           width: 36px; height: 4px;
@@ -913,7 +921,7 @@ class FoyerTasksCard extends HTMLElement {
       </ha-card>
 
       <div class="modal-overlay">
-        <div class="modal">
+        <div class="modal" tabindex="-1">
           <div class="modal-drag"></div>
           <div class="modal-eyebrow">Qui a fait ça ?</div>
           <div class="modal-task-name"></div>
@@ -982,7 +990,7 @@ class FoyerTasksCard extends HTMLElement {
       </div>
 
       <div class="ctx-overlay">
-        <div class="ctx-modal">
+        <div class="ctx-modal" tabindex="-1">
           <div class="modal-drag"></div>
           <div class="ctx-task-name"></div>
           <button class="ctx-btn ctx-postpone"><span class="ctx-icon">⏩</span>Décaler à demain</button>
@@ -996,7 +1004,7 @@ class FoyerTasksCard extends HTMLElement {
       </div>
 
       <div class="members-overlay">
-        <div class="members-modal">
+        <div class="members-modal" tabindex="-1">
           <div class="modal-drag"></div>
           <div class="members-modal-title">
             <span>Membres</span>
@@ -1089,6 +1097,10 @@ class FoyerTasksCard extends HTMLElement {
     mf.querySelector('.mform-initial').addEventListener('input', e => {
       e.target._userEdited = e.target.value.length > 0;
     });
+
+    // Keep keyboard focus trapped in whichever modal is on top, and let
+    // Escape dismiss it — mirrors the tap-to-close behaviour above.
+    this.shadowRoot.addEventListener('keydown', e => this._onOverlayKeydown(e));
 
     this._rendered = true;
     this._seq = this._hass?.states[this._config.foyer_sensor]?.state;
@@ -1370,11 +1382,14 @@ class FoyerTasksCard extends HTMLElement {
     btn.disabled = false;
     btn.textContent = task ? 'Enregistrer les modifications' : 'Ajouter la tâche';
     co.classList.add('open');
+    this._lockScroll();
     setTimeout(() => co.querySelector('.create-title-input').focus(), 220);
   }
 
   _closeCreateForm() {
-    this.shadowRoot.querySelector('.create-overlay').classList.remove('open');
+    const co = this.shadowRoot.querySelector('.create-overlay');
+    if (co?.classList.contains('open')) this._unlockScroll();
+    co?.classList.remove('open');
     this._editingTask = null;
   }
 
@@ -1386,10 +1401,14 @@ class FoyerTasksCard extends HTMLElement {
     // "Ignorer" only makes sense for recurring tasks
     cx.querySelector('.ctx-skip').style.display = task.recurring ? '' : 'none';
     cx.classList.add('open');
+    this._lockScroll();
+    this._focusModal(cx.querySelector('.ctx-modal'));
   }
 
   _closeCtx() {
-    this.shadowRoot.querySelector('.ctx-overlay').classList.remove('open');
+    const cx = this.shadowRoot.querySelector('.ctx-overlay');
+    if (cx?.classList.contains('open')) this._unlockScroll();
+    cx?.classList.remove('open');
     this._ctxTask = null;
   }
 
@@ -1483,11 +1502,21 @@ class FoyerTasksCard extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelector('.members-overlay').classList.add('open');
+    const overlay = this.shadowRoot.querySelector('.members-overlay');
+    const wasOpen = overlay.classList.contains('open');
+    overlay.classList.add('open');
+    // _openMembers() is re-called to refresh the list after add/delete while
+    // it's already open — only lock/focus on the actual open transition.
+    if (!wasOpen) {
+      this._lockScroll();
+      this._focusModal(overlay.querySelector('.members-modal'));
+    }
   }
 
   _closeMembers() {
-    this.shadowRoot.querySelector('.members-overlay').classList.remove('open');
+    const overlay = this.shadowRoot.querySelector('.members-overlay');
+    if (overlay?.classList.contains('open')) this._unlockScroll();
+    overlay?.classList.remove('open');
   }
 
   _openMemberForm(member = null) {
@@ -1502,11 +1531,14 @@ class FoyerTasksCard extends HTMLElement {
     mf.querySelectorAll('.tone-swatch').forEach(s => s.classList.toggle('active', s.dataset.tone === tone));
     mf.querySelector('.mform-submit').textContent = member ? 'Enregistrer' : 'Ajouter';
     mf.classList.add('open');
+    this._lockScroll();
     setTimeout(() => mf.querySelector('.mform-name').focus(), 220);
   }
 
   _closeMemberForm() {
-    this.shadowRoot.querySelector('.mform-overlay').classList.remove('open');
+    const mf = this.shadowRoot.querySelector('.mform-overlay');
+    if (mf?.classList.contains('open')) this._unlockScroll();
+    mf?.classList.remove('open');
     this._editingMember = null;
   }
 
@@ -1652,6 +1684,71 @@ class FoyerTasksCard extends HTMLElement {
     return '';
   }
 
+  // ── Modal helpers ────────────────────────────────────────────────────────
+  // Every modal in this card shares two problems on touch devices: the
+  // dashboard behind the overlay keeps scrolling under a dragging finger
+  // (which eats the tap that was meant for a button), and nothing ever
+  // receives keyboard/AT focus when a modal opens. These helpers fix both,
+  // shared across all five overlay pairs below.
+
+  // Locked with a depth counter (not a boolean) because the members list and
+  // the member-edit form can be open at the same time — closing the inner
+  // one must not release the lock the outer one still needs.
+  _lockScroll() {
+    this._scrollLockDepth = (this._scrollLockDepth ?? 0) + 1;
+    if (this._scrollLockDepth > 1) return;
+    this._scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const s = document.body.style;
+    s.position = 'fixed';
+    s.top      = `-${this._scrollY}px`;
+    s.left     = '0';
+    s.right    = '0';
+    s.width    = '100%';
+  }
+
+  _unlockScroll() {
+    if (!this._scrollLockDepth) return;
+    this._scrollLockDepth--;
+    if (this._scrollLockDepth > 0) return;
+    const s = document.body.style;
+    s.position = s.top = s.left = s.right = s.width = '';
+    window.scrollTo(0, this._scrollY || 0);
+  }
+
+  _focusModal(el) {
+    clearTimeout(this._focusTimer);
+    this._focusTimer = setTimeout(() => el?.focus(), 220);
+  }
+
+  _openOverlays() {
+    return [...this.shadowRoot.querySelectorAll(
+      '.modal-overlay, .create-overlay, .ctx-overlay, .members-overlay, .mform-overlay'
+    )].filter(o => o.classList.contains('open'));
+  }
+
+  // Traps Tab inside the topmost open overlay and lets Escape dismiss it,
+  // using the same cancel/close button the backdrop tap already calls.
+  _onOverlayKeydown(e) {
+    const overlays = this._openOverlays();
+    if (!overlays.length) return;
+    const top = overlays[overlays.length - 1];
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      top.querySelector('.modal-cancel')?.click();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+
+    const focusable = [...top.querySelectorAll('button, input, [tabindex]')]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    const active = this.shadowRoot.activeElement;
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  }
+
   // ── Modal ──────────────────────────────────────────────────────────────────
   static get _MODAL_EYEBROW() {
     return {
@@ -1686,11 +1783,16 @@ class FoyerTasksCard extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelector('.modal-overlay').classList.add('open');
+    const overlay = this.shadowRoot.querySelector('.modal-overlay');
+    overlay.classList.add('open');
+    this._lockScroll();
+    this._focusModal(overlay.querySelector('.modal'));
   }
 
   _closeModal() {
-    this.shadowRoot.querySelector('.modal-overlay')?.classList.remove('open');
+    const overlay = this.shadowRoot.querySelector('.modal-overlay');
+    if (overlay?.classList.contains('open')) this._unlockScroll();
+    overlay?.classList.remove('open');
     this._pendingTask   = null;
     this._pendingAction = null;
   }
